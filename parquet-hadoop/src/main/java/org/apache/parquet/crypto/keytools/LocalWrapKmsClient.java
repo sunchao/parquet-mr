@@ -34,12 +34,11 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 /**
- * Typically, KMS systems support in-server key wrapping. Their clients should implement KmsClient interface directly.
- * An extension of the LocalWrapKmsClient class should used only in rare situations where in-server wrapping is not
- * supported. The wrapping will be done locally then - the MEKs will be fetched from the KMS server via the
- * getMasterKeyFromServer function, and used to encrypt a DEK or KEK inside the LocalWrapKmsClient code.
- * Note: master key rotation is not supported with local wrapping.
+ * This experimental class is deprecated. Use LocalKeyWrapClient.
+ *
+ * Note: master key rotation is not supported in this class.
  */
+@Deprecated
 public abstract class LocalWrapKmsClient implements KmsClient {
 
   public static final String LOCAL_WRAP_NO_KEY_VERSION = "NO_VERSION";
@@ -53,13 +52,13 @@ public abstract class LocalWrapKmsClient implements KmsClient {
   private ConcurrentMap<String, byte[]> masterKeyCache;
 
   /**
-   * KMS systems wrap keys by encrypting them by master keys, and attaching additional information (such as the version 
+   * KMS systems wrap keys by encrypting them by master keys, and attaching additional information (such as the version
    * number of the masker key) to the result of encryption. The master key version is required in  key rotation.
    * Currently, the local wrapping mode does not support key rotation (because not all KMS systems allow to fetch a master
    * key by its ID and version number). Still, the local wrapping mode adds a placeholder for the master key version, that will
    * enable support for key rotation in this mode in the future, with appropriate KMS systems. This will also enable backward
    * compatibility, where future readers will be able to extract master key version in the files written by the current code.
-   * 
+   *
    * LocalKeyWrap class writes (and reads) the "key wrap" as a flat json with the following fields:
    * 1. "masterKeyVersion" - a String, with the master key version. In the current version, only one value is allowed - "NO_VERSION".
    * 2. "encryptedKey" - a String, with the key encrypted by the master key (base64-encoded).
@@ -116,7 +115,7 @@ public abstract class LocalWrapKmsClient implements KmsClient {
   public void initialize(Configuration configuration, String kmsInstanceID, String kmsInstanceURL, String accessToken) {
     this.kmsInstanceID = kmsInstanceID;
     this.kmsInstanceURL = kmsInstanceURL;
-    
+
     masterKeyCache = new ConcurrentHashMap<>();
     hadoopConfiguration = configuration;
     kmsToken = accessToken;
@@ -162,20 +161,20 @@ public abstract class LocalWrapKmsClient implements KmsClient {
 
   /**
    * Get master key from the remote KMS server.
-   * 
+   *
    * If your KMS client code throws runtime exceptions related to access/permission problems
    * (such as Hadoop AccessControlException), catch them and throw the KeyAccessDeniedException.
-   * 
+   *
    * @param masterKeyIdentifier: a string that uniquely identifies the master key in a KMS instance
    * @return master key bytes
    * @throws KeyAccessDeniedException unauthorized to get the master key
    */
-  protected abstract byte[] getMasterKeyFromServer(String masterKeyIdentifier) 
+  protected abstract byte[] getMasterKeyFromServer(String masterKeyIdentifier)
       throws KeyAccessDeniedException;
 
   /**
    * Pass configuration with KMS-specific parameters.
    */
-  protected abstract void initializeInternal() 
+  protected abstract void initializeInternal()
       throws KeyAccessDeniedException;
 }
