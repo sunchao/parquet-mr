@@ -599,7 +599,8 @@ class EncryptedColumnChunkMetaData extends ColumnChunkMetaData {
     if (decrypted) return;
 
     if (null == fileDecryptor) {
-      throw new ParquetCryptoRuntimeException(path + ". Null File Decryptor");
+      throw new ParquetCryptoRuntimeException(path + ". Can't open encrypted metadata, null file decryptor. " +
+        "Make sure decryption properties are passed to reader");
     }
 
     // Decrypt the ColumnMetaData
