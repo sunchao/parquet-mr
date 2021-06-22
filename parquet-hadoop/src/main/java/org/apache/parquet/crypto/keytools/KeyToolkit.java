@@ -211,10 +211,10 @@ public class KeyToolkit {
     }
   }
 
-  public static int rotateMasterKeysInTree(String treeRootFolderPath, Configuration hadoopConfig) throws IOException {
-    int rotated = rotateMasterKeysInFolder(new Path(treeRootFolderPath), hadoopConfig, true);
+  public static int rotateSubtreeMasterKeys(String subtreeRootFolder, Configuration hadoopConfig) throws IOException {
+    int rotated = rotateMasterKeysInFolder(new Path(subtreeRootFolder), hadoopConfig, true);
     if (0 == rotated) {
-      throw new ParquetCryptoRuntimeException("No key material files rotated under " + treeRootFolderPath);
+      throw new ParquetCryptoRuntimeException("No key material files rotated under " + subtreeRootFolder);
     }
 
     return rotated;
