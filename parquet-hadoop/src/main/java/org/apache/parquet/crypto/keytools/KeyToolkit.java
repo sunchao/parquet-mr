@@ -201,11 +201,23 @@ public class KeyToolkit {
    * @param hadoopConfig Hadoop configuration
    */
   public static void rotateMasterKeys (String folderPath, Configuration hadoopConfig) throws IOException {
-    rotateMasterKeysInFolder(new Path(folderPath), hadoopConfig, false);
+    if (hadoopConfig.getBoolean(KEY_MATERIAL_INTERNAL_PROPERTY_NAME, false)) {
+      throw new UnsupportedOperationException("Key rotation is not supported for internal key material");
+    }
+
+    int rotated = rotateMasterKeysInFolder(new Path(folderPath), hadoopConfig, false);
+    if (0 == rotated) {
+      throw new ParquetCryptoRuntimeException("No key material files rotated in " + folderPath);
+    }
   }
 
   public static int rotateMasterKeysInTree(String treeRootFolderPath, Configuration hadoopConfig) throws IOException {
-    return rotateMasterKeysInFolder(new Path(treeRootFolderPath), hadoopConfig, true);
+    int rotated = rotateMasterKeysInFolder(new Path(treeRootFolderPath), hadoopConfig, true);
+    if (0 == rotated) {
+      throw new ParquetCryptoRuntimeException("No key material files rotated under " + treeRootFolderPath);
+    }
+
+    return rotated;
   }
 
   private static int rotateMasterKeysInFolder(Path parentPath, Configuration hadoopConfig, boolean nested)
