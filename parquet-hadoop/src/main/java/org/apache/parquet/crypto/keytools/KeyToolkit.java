@@ -91,6 +91,7 @@ public class KeyToolkit {
   public static final int DATA_KEY_LENGTH_DEFAULT = 128;
   public static final int KEK_LENGTH_DEFAULT = 128;
 
+  private static FileSystem hadoopFileSystemForRotation;
   private static long lastCacheCleanForKeyRotationTime = 0;
   private static Object lastCacheCleanForKeyRotationTimeLock = new Object();
   // KMS servers typically allow to run key rotation once in a few hours / a day.
@@ -198,18 +199,53 @@ public class KeyToolkit {
    * Method can be run by multiple threads, but each thread must work on a different folder.
    * @param folderPath parent path of Parquet files, whose keys will be rotated
    * @param hadoopConfig Hadoop configuration
-   * @throws IOException I/O problems
-   * @throws ParquetCryptoRuntimeException General parquet encryption problems
-   * @throws KeyAccessDeniedException No access to master keys
-   * @throws UnsupportedOperationException Master key rotation not supported in the specific configuration
    */
-  public static void rotateMasterKeys(String folderPath, Configuration hadoopConfig)
-    throws IOException, ParquetCryptoRuntimeException, KeyAccessDeniedException, UnsupportedOperationException {
+  public static void rotateMasterKeys (String folderPath, Configuration hadoopConfig) throws IOException {
+    rotateMasterKeysInFolder(new Path(folderPath), hadoopConfig, false);
+  }
 
-    if (hadoopConfig.getBoolean(KEY_MATERIAL_INTERNAL_PROPERTY_NAME, false)) {
-      throw new UnsupportedOperationException("Key rotation is not supported for internal key material");
+  public static int rotateMasterKeysInTree(String treeRootFolderPath, Configuration hadoopConfig) throws IOException {
+    return rotateMasterKeysInFolder(new Path(treeRootFolderPath), hadoopConfig, true);
+  }
+
+  private static int rotateMasterKeysInFolder(Path parentPath, Configuration hadoopConfig, boolean nested)
+    throws IOException {
+
+    if (null == hadoopFileSystemForRotation) {
+      hadoopFileSystemForRotation = parentPath.getFileSystem(hadoopConfig);
+    }
+    FileStatus[] itemsInFolder = hadoopFileSystemForRotation.listStatus(parentPath, HiddenFileFilter.INSTANCE);
+    if (itemsInFolder.length == 0) {
+      return 0;
     }
 
+    int numberOfRotatedFiles = 0;
+    for (FileStatus fs : itemsInFolder) {
+      Path folderItem = fs.getPath();
+      if (hadoopFileSystemForRotation.isDirectory(folderItem)) {
+        if (nested) {
+          numberOfRotatedFiles += rotateMasterKeysInFolder(folderItem, hadoopConfig, true);
+        } else {
+          throw new ParquetCryptoRuntimeException("Subfolder found: " + folderItem.getName() +
+            " in " + parentPath.getName());
+        }
+      } else {
+        if (folderItem.getName().contains(".parquet")) {
+          rotateFileMasterKeys(folderItem, hadoopConfig);
+          numberOfRotatedFiles++;
+        }
+      }
+    }
+
+    return numberOfRotatedFiles;
+  }
+
+  public static void rotateFileMasterKeys(String filePath, Configuration hadoopConfig) throws IOException {
+    Path parquetFile = new Path(filePath);
+    rotateFileMasterKeys(parquetFile, hadoopConfig);
+  }
+
+  private static void rotateFileMasterKeys(Path parquetFile, Configuration hadoopConfig) throws IOException {
     // If process wrote files with double-wrapped keys, clean KEK cache (since master keys are changing).
     // Only once for each key rotation cycle; not for every folder
     long currentTime = System.currentTimeMillis();
@@ -220,53 +256,41 @@ public class KeyToolkit {
       }
     }
 
-    Path parentPath = new Path(folderPath);
-
-    FileSystem hadoopFileSystem = parentPath.getFileSystem(hadoopConfig);
-    if (!hadoopFileSystem.exists(parentPath) || !hadoopFileSystem.isDirectory(parentPath)) {
-      throw new ParquetCryptoRuntimeException("Couldn't rotate keys - folder doesn't exist or is not a directory: " + folderPath);
+    if (null == hadoopFileSystemForRotation) {
+      hadoopFileSystemForRotation = parquetFile.getFileSystem(hadoopConfig);
     }
 
-    FileStatus[] parquetFilesInFolder = hadoopFileSystem.listStatus(parentPath, HiddenFileFilter.INSTANCE);
-    if (parquetFilesInFolder.length == 0) {
-      throw new ParquetCryptoRuntimeException("Couldn't rotate keys - no parquet files in folder " + folderPath);
+    FileKeyMaterialStore keyMaterialStore = new HadoopFSKeyMaterialStore(hadoopFileSystemForRotation);
+    keyMaterialStore.initialize(parquetFile, hadoopConfig, false);
+
+    FileKeyMaterialStore tempKeyMaterialStore = new HadoopFSKeyMaterialStore(hadoopFileSystemForRotation);
+    tempKeyMaterialStore.initialize(parquetFile, hadoopConfig, true);
+
+    Set<String> fileKeyIdSet = keyMaterialStore.getKeyIDSet();
+
+    // Start with footer key (to get KMS ID, URL, if needed)
+    FileKeyUnwrapper fileKeyUnwrapper = new FileKeyUnwrapper(hadoopConfig, parquetFile, keyMaterialStore);
+    String keyMaterialString = keyMaterialStore.getKeyMaterial(KeyMaterial.FOOTER_KEY_ID_IN_FILE);
+    KeyWithMasterID key = fileKeyUnwrapper.getDEKandMasterID(KeyMaterial.parse(keyMaterialString));
+    KmsClientAndDetails kmsClientAndDetails = fileKeyUnwrapper.getKmsClientAndDetails();
+
+    FileKeyWrapper fileKeyWrapper = new FileKeyWrapper(hadoopConfig, tempKeyMaterialStore, kmsClientAndDetails);
+    fileKeyWrapper.getEncryptionKeyMetadata(key.getDataKey(), key.getMasterID(), true,
+      KeyMaterial.FOOTER_KEY_ID_IN_FILE);
+
+    fileKeyIdSet.remove(KeyMaterial.FOOTER_KEY_ID_IN_FILE);
+    // Rotate column keys
+    for (String keyIdInFile : fileKeyIdSet) {
+      keyMaterialString = keyMaterialStore.getKeyMaterial(keyIdInFile);
+      key = fileKeyUnwrapper.getDEKandMasterID(KeyMaterial.parse(keyMaterialString));
+      fileKeyWrapper.getEncryptionKeyMetadata(key.getDataKey(), key.getMasterID(), false, keyIdInFile);
     }
 
-    for (FileStatus fs : parquetFilesInFolder) {
-      Path parquetFile = fs.getPath();
+    tempKeyMaterialStore.saveMaterial();
 
-      FileKeyMaterialStore keyMaterialStore = new HadoopFSKeyMaterialStore(hadoopFileSystem);
-      keyMaterialStore.initialize(parquetFile, hadoopConfig, false);
+    keyMaterialStore.removeMaterial();
 
-      FileKeyMaterialStore tempKeyMaterialStore = new HadoopFSKeyMaterialStore(hadoopFileSystem);
-      tempKeyMaterialStore.initialize(parquetFile, hadoopConfig, true);
-
-      Set<String> fileKeyIdSet = keyMaterialStore.getKeyIDSet();
-
-      // Start with footer key (to get KMS ID, URL, if needed)
-      FileKeyUnwrapper fileKeyUnwrapper = new FileKeyUnwrapper(hadoopConfig, parquetFile, keyMaterialStore);
-      String keyMaterialString = keyMaterialStore.getKeyMaterial(KeyMaterial.FOOTER_KEY_ID_IN_FILE);
-      KeyWithMasterID key = fileKeyUnwrapper.getDEKandMasterID(KeyMaterial.parse(keyMaterialString));
-      KmsClientAndDetails kmsClientAndDetails = fileKeyUnwrapper.getKmsClientAndDetails();
-
-      FileKeyWrapper fileKeyWrapper = new FileKeyWrapper(hadoopConfig, tempKeyMaterialStore, kmsClientAndDetails);
-      fileKeyWrapper.getEncryptionKeyMetadata(key.getDataKey(), key.getMasterID(), true,
-        KeyMaterial.FOOTER_KEY_ID_IN_FILE);
-
-      fileKeyIdSet.remove(KeyMaterial.FOOTER_KEY_ID_IN_FILE);
-      // Rotate column keys
-      for (String keyIdInFile : fileKeyIdSet) {
-        keyMaterialString = keyMaterialStore.getKeyMaterial(keyIdInFile);
-        key = fileKeyUnwrapper.getDEKandMasterID(KeyMaterial.parse(keyMaterialString));
-        fileKeyWrapper.getEncryptionKeyMetadata(key.getDataKey(), key.getMasterID(), false, keyIdInFile);
-      }
-
-      tempKeyMaterialStore.saveMaterial();
-
-      keyMaterialStore.removeMaterial();
-
-      tempKeyMaterialStore.moveMaterialTo(keyMaterialStore);
-    }
+    tempKeyMaterialStore.moveMaterialTo(keyMaterialStore);
   }
 
   /**
