@@ -21,6 +21,7 @@ package org.apache.parquet.filter2.recordlevel;
 import org.apache.parquet.io.api.Binary;
 
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * A rewritten version of a {@link org.apache.parquet.filter2.predicate.FilterPredicate} which receives
@@ -120,6 +121,46 @@ public interface IncrementallyUpdatedFilterPredicate {
     @Override
     public boolean accept(Visitor visitor) {
       return visitor.visit(this);
+    }
+  }
+
+  abstract class SetInspector implements IncrementallyUpdatedFilterPredicate {
+    private final Set<ValueInspector> predicates;
+
+    SetInspector(Set<ValueInspector> predicates) {
+      this.predicates = predicates;
+    }
+
+    public final Set<ValueInspector> getPredicates() {
+      return predicates;
+    }
+  }
+
+  final class In extends SetInspector {
+    In(Set<ValueInspector> predicates) {
+      super(predicates);
+    }
+
+    @Override
+    public boolean accept(Visitor visitor) {
+      for (ValueInspector vi : getPredicates()) {
+        if (vi.accept(visitor)) return true;
+      }
+      return false;
+    }
+  }
+
+  final class NotIn extends SetInspector {
+    NotIn(Set<ValueInspector> predicates) {
+      super(predicates);
+    }
+
+    @Override
+    public boolean accept(Visitor visitor) {
+      for (ValueInspector vi : getPredicates()) {
+        if (vi.accept(visitor)) return false;
+      }
+      return true;
     }
   }
 
