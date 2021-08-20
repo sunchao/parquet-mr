@@ -48,7 +48,11 @@ class H1SeekableInputStream extends DelegatingSeekableInputStream {
 
   @Override
   public void readFully(byte[] bytes) throws IOException {
-    stream.readFully(bytes, 0, bytes.length);
+    if (bytes.length == 4) {
+      stream.readFully(stream.getPos(), bytes, 0, bytes.length);
+    } else {
+      stream.readFully(bytes, 0, bytes.length);
+    }
   }
 
   @Override
