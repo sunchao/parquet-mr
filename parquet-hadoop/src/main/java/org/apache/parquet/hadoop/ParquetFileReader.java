@@ -571,10 +571,10 @@ public class ParquetFileReader implements Closeable {
 
     // Read all the footer bytes in one time to avoid multiple read operations,
     // since it can be pretty time consuming for a single read operation in HDFS.
-    ByteBuffer footerBytesBuffer = ByteBuffer.allocate(fileMetadataLength);
-    f.readFully(footerBytesBuffer);
+    byte[] footerBytes = new byte[fileMetadataLength];
+    f.readFully(footerBytes);
+    ByteBuffer footerBytesBuffer = ByteBuffer.wrap(footerBytes);
     LOG.debug("Finished to read all footer bytes.");
-    footerBytesBuffer.flip();
     InputStream footerBytesStream = ByteBufferInputStream.wrap(footerBytesBuffer);
 
     // Regular file, or encrypted file with plaintext footer

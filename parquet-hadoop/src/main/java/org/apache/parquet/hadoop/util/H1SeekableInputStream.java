@@ -30,10 +30,18 @@ import java.io.IOException;
 class H1SeekableInputStream extends DelegatingSeekableInputStream {
 
   private final FSDataInputStream stream;
+  private final boolean usePositionedReader;
 
   public H1SeekableInputStream(FSDataInputStream stream) {
     super(stream);
     this.stream = stream;
+    this.usePositionedReader = false;
+  }
+
+  public H1SeekableInputStream(FSDataInputStream stream, boolean usePositionedReader) {
+    super(stream);
+    this.stream = stream;
+    this.usePositionedReader = usePositionedReader;
   }
 
   @Override
@@ -48,7 +56,7 @@ class H1SeekableInputStream extends DelegatingSeekableInputStream {
 
   @Override
   public void readFully(byte[] bytes) throws IOException {
-    if (bytes.length == 4) {
+    if (usePositionedReader) {
       stream.readFully(stream.getPos(), bytes, 0, bytes.length);
     } else {
       stream.readFully(bytes, 0, bytes.length);
