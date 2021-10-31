@@ -88,7 +88,7 @@ public abstract class LocalKeyWrapClient implements KmsClient {
    * 2. "masterKeyVersion" - a String, with the master key version.
    * 3. "encryptedKey" - a String, with the key encrypted by the master key (base64-encoded).
    */
-  private static class LocalKeyWrap {
+  static class LocalKeyWrap {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final String encryptedEncodedKey;
@@ -111,7 +111,7 @@ public abstract class LocalKeyWrapClient implements KmsClient {
       }
     }
 
-    private static LocalKeyWrap parse(String wrappedKey) {
+    static LocalKeyWrap parse(String wrappedKey) {
       Map<String, String> keyWrapMap;
       try {
         keyWrapMap = OBJECT_MAPPER.readValue(new StringReader(wrappedKey),
@@ -135,7 +135,7 @@ public abstract class LocalKeyWrapClient implements KmsClient {
       return new LocalKeyWrap(masterKeyVersion, encryptedEncodedKey);
     }
 
-    private String getMasterKeyVersion() {
+    String getMasterKeyVersion() {
       return masterKeyVersion;
     }
 

@@ -190,6 +190,30 @@ public class KeyToolkit {
     }
   }
 
+  static class KmsClientAndDetails {
+    private KmsClient kmsClient;
+    private String kmsInstanceID;
+    private String kmsInstanceURL;
+
+    public KmsClientAndDetails(KmsClient kmsClient, String kmsInstanceID, String kmsInstanceURL) {
+      this.kmsClient = kmsClient;
+      this.kmsInstanceID = kmsInstanceID;
+      this.kmsInstanceURL = kmsInstanceURL;
+    }
+
+    public KmsClient getKmsClient() {
+      return kmsClient;
+    }
+
+    public String getKmsInstanceID() {
+      return kmsInstanceID;
+    }
+
+    public String getKmsInstanceURL() {
+      return kmsInstanceURL;
+    }
+  }
+
   /**
    * Key rotation. In the single wrapping mode, decrypts data keys with old master keys, then encrypts
    * them with new master keys. In the double wrapping mode, decrypts KEKs (key encryption keys) with old
@@ -306,6 +330,81 @@ public class KeyToolkit {
   }
 
   /**
+   * Prints master key names and other info on encrypted parquet files.
+   * @param path path of Parquet file (or folder with Parquet files)
+   * @param hadoopConfig Hadoop configuration
+   */
+  public static void printCryptoInfo(String path, Configuration hadoopConfig)
+    throws IOException, ParquetCryptoRuntimeException, KeyAccessDeniedException, UnsupportedOperationException {
+
+    Path hadoopPath = new Path(path);
+    FileSystem hadoopFileSystem = hadoopPath.getFileSystem(hadoopConfig);
+
+    if (!hadoopFileSystem.exists(hadoopPath)) {
+      throw new ParquetCryptoRuntimeException("File or folder doesn't exist: " + path);
+    }
+
+    if (!hadoopFileSystem.isDirectory(hadoopPath)) {
+      printFileCryptoInfo(hadoopPath, hadoopFileSystem, hadoopConfig);
+      return;
+    }
+
+    FileStatus[] parquetFilesInFolder = hadoopFileSystem.listStatus(hadoopPath, HiddenFileFilter.INSTANCE);
+    if (parquetFilesInFolder.length == 0) {
+      throw new ParquetCryptoRuntimeException("No parquet files in folder " + path);
+    }
+
+    for (FileStatus fs : parquetFilesInFolder) {
+      Path parquetFile = fs.getPath();
+      System.out.println("-----------------------------");
+      System.out.println("Parquet file: " + parquetFile);
+      printFileCryptoInfo(parquetFile, hadoopFileSystem, hadoopConfig);
+    }
+  }
+
+  private static void printFileCryptoInfo(Path parquetFile, FileSystem hadoopFileSystem, Configuration hadoopConfig) {
+
+    // TODO check crypto footer
+    // TODO skip if internal material
+
+    FileKeyMaterialStore keyMaterialStore = new HadoopFSKeyMaterialStore(hadoopFileSystem);
+    keyMaterialStore.initialize(parquetFile, hadoopConfig, false);
+
+    // Start with footer key (to get KMS ID, URL, if needed)
+    String keyMaterialString = keyMaterialStore.getKeyMaterial(KeyMaterial.FOOTER_KEY_ID_IN_FILE);
+    KeyMaterial footerKeyMaterial = KeyMaterial.parse(keyMaterialString);
+    // TODO System.out.println("KMS Instance URL: " + footerKeyMaterial.getKmsInstanceURL() +
+    // TODO  ". Instance ID: " + footerKeyMaterial.getKmsInstanceID());
+    System.out.println("Double wrapping: " + footerKeyMaterial.isDoubleWrapped());
+    System.out.println("Footer key. Master Key ID: " + footerKeyMaterial.getMasterKeyID());
+    String kmsWrappedKey = footerKeyMaterial.isDoubleWrapped() ?
+      footerKeyMaterial.getWrappedKEK() : footerKeyMaterial.getWrappedDEK();
+    printKmsWrap(kmsWrappedKey);
+
+    Set<String> fileKeyIdSet = keyMaterialStore.getKeyIDSet();
+    fileKeyIdSet.remove(KeyMaterial.FOOTER_KEY_ID_IN_FILE);
+    // Run over column keys
+    for (String keyIdInFile : fileKeyIdSet) {
+      keyMaterialString = keyMaterialStore.getKeyMaterial(keyIdInFile);
+      KeyMaterial columnKeyMaterial = KeyMaterial.parse(keyMaterialString);
+      System.out.println("Column key. Master Key ID: " + columnKeyMaterial.getMasterKeyID());
+      kmsWrappedKey = columnKeyMaterial.isDoubleWrapped() ?
+        columnKeyMaterial.getWrappedKEK() : columnKeyMaterial.getWrappedDEK();
+      printKmsWrap(kmsWrappedKey);
+    }
+  }
+
+  private static void printKmsWrap(String kmsWrappedKey) {
+    try {
+      LocalKeyWrapClient.LocalKeyWrap localKeyWrap = LocalKeyWrapClient.LocalKeyWrap.parse(kmsWrappedKey);
+      System.out.println("Local wrapping. Master key version: " + localKeyWrap.getMasterKeyVersion());
+    } catch (Exception e) {
+      // Wrap is not local. Dumping KMS-specific key wrapping material
+      System.out.println("KMS wrapping material for this key: " + kmsWrappedKey);
+    }
+  }
+
+  /**
    * Flush any caches that are tied to the (compromised) accessToken
    * @param accessToken access token
    */
@@ -402,29 +501,5 @@ public class KeyToolkit {
 
   static boolean stringIsEmpty(String str) {
     return (null == str) || str.isEmpty();
-  }
-
-  static class KmsClientAndDetails {
-    private KmsClient kmsClient;
-    private String kmsInstanceID;
-    private String kmsInstanceURL;
-
-    public KmsClientAndDetails(KmsClient kmsClient, String kmsInstanceID, String kmsInstanceURL) {
-      this.kmsClient = kmsClient;
-      this.kmsInstanceID = kmsInstanceID;
-      this.kmsInstanceURL = kmsInstanceURL;
-    }
-
-    public KmsClient getKmsClient() {
-      return kmsClient;
-    }
-
-    public String getKmsInstanceID() {
-      return kmsInstanceID;
-    }
-
-    public String getKmsInstanceURL() {
-      return kmsInstanceURL;
-    }
   }
 }
