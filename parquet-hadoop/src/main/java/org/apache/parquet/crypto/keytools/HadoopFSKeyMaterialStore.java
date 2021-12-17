@@ -44,7 +44,7 @@ public class HadoopFSKeyMaterialStore implements FileKeyMaterialStore {
   private Map<String, String> keyMaterialMap;
   private Path keyMaterialFile;
 
-  HadoopFSKeyMaterialStore(FileSystem hadoopFileSystem) {
+  public HadoopFSKeyMaterialStore(FileSystem hadoopFileSystem) {
     this.hadoopFileSystem = hadoopFileSystem;
   }
 

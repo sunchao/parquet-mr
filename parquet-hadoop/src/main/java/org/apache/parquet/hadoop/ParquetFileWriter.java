@@ -394,7 +394,7 @@ public class ParquetFileWriter {
     out.write(magic);
   }
 
-  InternalFileEncryptor getEncryptor() {
+  public InternalFileEncryptor getEncryptor() {
     return fileEncryptor;
   }
 

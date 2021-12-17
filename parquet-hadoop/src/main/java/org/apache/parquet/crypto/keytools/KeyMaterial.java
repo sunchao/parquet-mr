@@ -54,8 +54,8 @@ public class KeyMaterial {
   static final String KEY_MATERIAL_TYPE_FIELD = "keyMaterialType";
   static final String KEY_MATERIAL_TYPE1 = "PKMT1";
 
-  static final String FOOTER_KEY_ID_IN_FILE = "footerKey";
-  static final String COLUMN_KEY_ID_IN_FILE_PREFIX = "columnKey";
+  public static final String FOOTER_KEY_ID_IN_FILE = "footerKey";
+  public static final String COLUMN_KEY_ID_IN_FILE_PREFIX = "columnKey";
 
   private static final String IS_FOOTER_KEY_FIELD = "isFooterKey";
   private static final String DOUBLE_WRAPPING_FIELD = "doubleWrapping";
@@ -90,7 +90,7 @@ public class KeyMaterial {
   }
 
   // parses external key material
-  static KeyMaterial parse(String keyMaterialString) {
+  public static KeyMaterial parse(String keyMaterialString) {
     Map<String, Object> keyMaterialJson = null;
     try {
       keyMaterialJson = OBJECT_MAPPER.readValue(new StringReader(keyMaterialString),
@@ -109,7 +109,7 @@ public class KeyMaterial {
   }
 
   // parses fields common to internal and external key material
-  static KeyMaterial parse(Map<String, Object> keyMaterialJson) {
+  public static KeyMaterial parse(Map<String, Object> keyMaterialJson) {
     // 2. Check if "key material" belongs to file footer key
     Boolean isFooterKey = (Boolean) keyMaterialJson.get(IS_FOOTER_KEY_FIELD);
     String kmsInstanceID = null;
@@ -138,7 +138,7 @@ public class KeyMaterial {
     return new KeyMaterial(isFooterKey, kmsInstanceID, kmsInstanceURL, masterKeyID, isDoubleWrapped, kekID, encodedWrappedKEK, encodedWrappedDEK);
   }
 
-  static String createSerialized(boolean isFooterKey, String kmsInstanceID, String kmsInstanceURL, String masterKeyID, 
+  public static String createSerialized(boolean isFooterKey, String kmsInstanceID, String kmsInstanceURL, String masterKeyID, 
       boolean isDoubleWrapped, String kekID, String encodedWrappedKEK, String encodedWrappedDEK, boolean isInternalStorage) {
     Map<String, Object> keyMaterialMap = new HashMap<String, Object>(10);
     // 1. Write "key material type"
@@ -176,35 +176,35 @@ public class KeyMaterial {
     }
   }
 
-  boolean isFooterKey() {
+  public boolean isFooterKey() {
     return isFooterKey;
   }
 
-  boolean isDoubleWrapped() {
+  public boolean isDoubleWrapped() {
     return isDoubleWrapped;
   }
 
-  String getMasterKeyID() {
+  public String getMasterKeyID() {
     return masterKeyID;
   }
 
-  String getWrappedDEK() {
+  public String getWrappedDEK() {
     return encodedWrappedDEK;
   }
 
-  String getKekID() {
+  public String getKekID() {
     return kekID;
   }
 
-  String getWrappedKEK() {
+  public String getWrappedKEK() {
     return encodedWrappedKEK;
   }
 
-  String getKmsInstanceID() {
+  public String getKmsInstanceID() {
     return kmsInstanceID;
   }
 
-  String getKmsInstanceURL() {
+  public String getKmsInstanceURL() {
     return kmsInstanceURL;
   }
 }
