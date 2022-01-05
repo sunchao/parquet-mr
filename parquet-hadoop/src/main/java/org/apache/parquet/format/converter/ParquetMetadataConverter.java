@@ -1448,7 +1448,8 @@ public class ParquetMetadataConverter {
     }
 
     ParquetMetadata parquetMetadata = fromParquetMetadata(fileMetaData, fileDecryptor, encryptedFooter);
-    if (LOG.isDebugEnabled()) LOG.debug(ParquetMetadata.toPrettyJSON(parquetMetadata));
+    boolean encryptedFile = encryptedFooter || fileMetaData.isSetEncryption_algorithm();
+    if (LOG.isDebugEnabled()) LOG.debug(ParquetMetadata.toPrettyJSON(parquetMetadata, encryptedFile));
     return parquetMetadata;
   }
 

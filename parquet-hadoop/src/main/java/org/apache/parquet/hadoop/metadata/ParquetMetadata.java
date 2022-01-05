@@ -49,7 +49,7 @@ public class ParquetMetadata {
    * @return the json representation
    */
   public static String toJSON(ParquetMetadata parquetMetaData) {
-    return toJSON(parquetMetaData, false);
+    return toJSON(parquetMetaData, false, false);
   }
 
   /**
@@ -58,16 +58,22 @@ public class ParquetMetadata {
    * @return the pretty printed json representation
    */
   public static String toPrettyJSON(ParquetMetadata parquetMetaData) {
-    return toJSON(parquetMetaData, true);
+    return toJSON(parquetMetaData, true, false);
   }
 
-  private static String toJSON(ParquetMetadata parquetMetaData, boolean isPrettyPrint) {
+  public static String toPrettyJSON(ParquetMetadata parquetMetaData, boolean encryptedFile) {
+    return toJSON(parquetMetaData, true, encryptedFile);
+  }
+
+  private static String toJSON(ParquetMetadata parquetMetaData, boolean isPrettyPrint, boolean encryptedFile) {
     StringWriter stringWriter = new StringWriter();
+    // In encrypted files, print only file-wide metadata; not blocks with encrypted column metadata
+    Object objectToPrint = encryptedFile? parquetMetaData.getFileMetaData() : parquetMetaData;
     try {
       if (isPrettyPrint) {
-        objectMapper.writerWithDefaultPrettyPrinter().writeValue(stringWriter, parquetMetaData);
+        objectMapper.writerWithDefaultPrettyPrinter().writeValue(stringWriter, objectToPrint);
       } else {
-        objectMapper.writeValue(stringWriter, parquetMetaData);
+        objectMapper.writeValue(stringWriter, objectToPrint);
       }
     } catch (IOException e) {
       throw new RuntimeException(e);
