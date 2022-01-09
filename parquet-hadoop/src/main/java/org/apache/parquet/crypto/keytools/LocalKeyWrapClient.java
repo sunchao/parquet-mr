@@ -161,7 +161,7 @@ public abstract class LocalKeyWrapClient implements KmsClient {
     // refresh token
     kmsToken = hadoopConfiguration.getTrimmed(KeyToolkit.KEY_ACCESS_TOKEN_PROPERTY_NAME);
     MasterKeyWithVersion masterKeyLastVersion = getMasterKey(masterKeyIdentifier);
-    checkMasterKeyLength(key.length, masterKeyIdentifier, masterKeyLastVersion.getVersion());
+    checkMasterKeyLength(masterKeyLastVersion.getKey().length, masterKeyIdentifier, masterKeyLastVersion.getVersion());
     String encryptedEncodedKey =  KeyToolkit.encryptKeyLocally(key, masterKeyLastVersion.getKey(), null);
     return LocalKeyWrap.createSerialized(encryptedEncodedKey, masterKeyLastVersion.getVersion());
   }
