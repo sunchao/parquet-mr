@@ -468,6 +468,7 @@
             <exclude>thrift-${thrift.version}/**</exclude>
             <exclude>thrift-${thrift.version}.tar.gz</exclude>
             <exclude>**/dependency-reduced-pom.xml</exclude>
+            <exclude>**/rio.yml</exclude>
           </excludes>
         </configuration>
       </plugin>
