@@ -48,15 +48,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.LinkedBlockingDeque;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.LongAccumulator;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.stream.Collectors;
@@ -952,6 +944,9 @@ public class ParquetFileReader implements Closeable {
    * @return the PageReadStore which can provide PageReaders for each column.
    */
   public PageReadStore readNextRowGroup() throws IOException {
+    if (this.currentRowGroup != null) {
+      this.currentRowGroup.close();
+    }
     if (currentBlock == blocks.size()) {
       return null;
     }
@@ -1040,6 +1035,9 @@ public class ParquetFileReader implements Closeable {
       return readNextRowGroup();
     }
 
+    if (this.currentRowGroup != null) {
+      this.currentRowGroup.close();
+    }
     this.currentRowGroup = new ColumnChunkPageReadStore(rowRanges);
     // prepare the list of consecutive parts to read them in one scan
     ChunkListBuilder builder = new ChunkListBuilder();
@@ -1383,6 +1381,9 @@ public class ParquetFileReader implements Closeable {
       if (inputStream != null) {
         inputStream.close();
       }
+      if (this.currentRowGroup != null) {
+        this.currentRowGroup.close();
+      }
       for (SeekableInputStream is : inputStreamList) {
         is.close();
       }
@@ -1535,25 +1536,23 @@ public class ParquetFileReader implements Closeable {
       BytesInputDecompressor decompressor = options.getCodecFactory().getDecompressor(descriptor.metadata.getCodec());
       DictionaryPage dictionaryPage;
       LinkedBlockingDeque<Optional<DataPage>> pagesInChunk;
-      try(
-      PageReader pageReader = new PageReader(this, currentBlock, headerBlockDecryptor,
-        pageBlockDecryptor, aadPrefix, rowGroupOrdinal, columnOrdinal, decompressor
-      )) {
 
-        // Read the dictionary page;
-        pageReader.readOnePage();
-        dictionaryPage = pageReader.getDictionaryPage();
-        if (isAsyncReaderEnabled()) {
-          pageReader.readAllRemainingPagesAsync();
-        } else {
-          pageReader.readAllRemainingPages();
-        }
-        pagesInChunk = pageReader.getPagesInChunk();
+      PageReader pageReader = new PageReader(this, currentBlock, headerBlockDecryptor,
+          pageBlockDecryptor, aadPrefix, rowGroupOrdinal, columnOrdinal, decompressor);
+
+      // Read the dictionary page;
+      pageReader.readOnePage();
+      dictionaryPage = pageReader.getDictionaryPage();
+      if (isAsyncReaderEnabled()) {
+        pageReader.readAllRemainingPagesAsync();
+      } else {
+        pageReader.readAllRemainingPages();
       }
+      pagesInChunk = pageReader.getPagesInChunk();
 
       return new ColumnChunkPageReader(decompressor, pagesInChunk, dictionaryPage, offsetIndex,
         this.descriptor.metadata.getValueCount(), blocks.get(currentBlock).getRowCount(),
-        pageBlockDecryptor, aadPrefix, rowGroupOrdinal, columnOrdinal);
+        pageBlockDecryptor, aadPrefix, rowGroupOrdinal, columnOrdinal, pageReader);
     }
 
 
@@ -1817,7 +1816,7 @@ public class ParquetFileReader implements Closeable {
   /**
    * Encapsulates the reading of a single page.
    */
-  private class PageReader implements Closeable {
+  public class PageReader implements Closeable {
     Chunk chunk;
     int currentBlock;
     BlockCipher.Decryptor headerBlockDecryptor;
