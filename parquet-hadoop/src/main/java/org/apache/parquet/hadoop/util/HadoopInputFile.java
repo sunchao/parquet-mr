@@ -66,8 +66,10 @@ public class HadoopInputFile implements InputFile {
 
   @Override
   public SeekableInputStream newStream() throws IOException {
-    if (stat.getPath().toString().startsWith("s3c")) {
+    if (stat.getPath().toString().startsWith("s3c")
+      || stat.getPath().toString().startsWith("blobc") ) {
       // S3AInputStream is categorized as H1SeekableInputStream
+      // also McQueen RangeReadInputStream
       return new H1SeekableInputStream(fs.open(stat.getPath()), true);
     } else {
       return HadoopStreams.wrap(fs.open(stat.getPath()));
