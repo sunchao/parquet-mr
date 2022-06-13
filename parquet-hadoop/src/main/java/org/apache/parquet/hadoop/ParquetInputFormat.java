@@ -145,9 +145,20 @@ public class ParquetInputFormat<T> extends FileInputFormat<Void, T> {
   public static final String BLOOM_FILTERING_ENABLED = "parquet.filter.bloom.enabled";
 
   /**
-   * key to configure whether parquet reader should use async file reads.
+   * key to configure whether parquet reader should use async file reads. If set to true, the
+   * parquet file reader will not block after issuing calls to get data from the file system.
+   * The calling thread can then continue to issue a read for other columns in parallel. If the
+   * calling thread does not read columns in parallel, the IO will still occur asynchronously,
+   * yielding after reading each block, to allow other IO tasks to proceed.
    */
-  public static final String ENABLE_ASYNC_READER = "parquet.read.async.enabled";
+  public static final String ENABLE_ASYNC_IO_READER = "parquet.read.async.io.enabled";
+  /**
+   * key to configure whether parquet reader should read all column data in parallel. If set to true
+   * the parquet file reader will issue calls to read all columns in parallel. This can be used in
+   * conjunction with async IO to maximize speed of reading of data from the file system. Without
+   * async IO this option still allows multiple columns to be decompressed and decoded in parallel.
+   */
+  public static final String ENABLE_PARALLEL_COLUMN_READER = "parquet.read.parallel.columnreader.enabled";
   /**
    * key to turn on or off task side metadata loading (default true)
    * if true then metadata is read on the task side and some tasks may finish immediately.
