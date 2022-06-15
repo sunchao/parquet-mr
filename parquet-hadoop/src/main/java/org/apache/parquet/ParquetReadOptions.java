@@ -32,6 +32,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
 
 import static org.apache.parquet.format.converter.ParquetMetadataConverter.NO_FILTER;
 
@@ -61,6 +62,8 @@ public class ParquetReadOptions {
   private final int maxAllocationSize;
   private final Map<String, String> properties;
   private final FileDecryptionProperties fileDecryptionProperties;
+  private final ExecutorService ioThreadPool;
+  private final ExecutorService processThreadPool;
 
   ParquetReadOptions(boolean useSignedStringMinMax,
                      boolean useStatsFilter,
@@ -76,7 +79,9 @@ public class ParquetReadOptions {
                      ByteBufferAllocator allocator,
                      int maxAllocationSize,
                      Map<String, String> properties,
-                     FileDecryptionProperties fileDecryptionProperties) {
+                     FileDecryptionProperties fileDecryptionProperties,
+                     ExecutorService ioThreadPool,
+                     ExecutorService processThreadPool) {
     this.useSignedStringMinMax = useSignedStringMinMax;
     this.useStatsFilter = useStatsFilter;
     this.useDictionaryFilter = useDictionaryFilter;
@@ -92,6 +97,8 @@ public class ParquetReadOptions {
     this.maxAllocationSize = maxAllocationSize;
     this.properties = Collections.unmodifiableMap(properties);
     this.fileDecryptionProperties = fileDecryptionProperties;
+    this.ioThreadPool = ioThreadPool;
+    this.processThreadPool = processThreadPool;
   }
 
   public boolean useSignedStringMinMax() {
@@ -158,6 +165,14 @@ public class ParquetReadOptions {
     return fileDecryptionProperties;
   }
 
+  public ExecutorService getIoThreadPool() {
+    return ioThreadPool;
+  }
+
+  public ExecutorService getProcessThreadPool() {
+    return processThreadPool;
+  }
+
   public boolean isEnabled(String property, boolean defaultValue) {
     Optional<String> propValue = Optional.ofNullable(properties.get(property));
     return propValue.isPresent() ? Boolean.valueOf(propValue.get())
@@ -185,6 +200,8 @@ public class ParquetReadOptions {
     protected int maxAllocationSize = ALLOCATION_SIZE_DEFAULT;
     protected Map<String, String> properties = new HashMap<>();
     protected FileDecryptionProperties fileDecryptionProperties = null;
+    protected ExecutorService ioThreadPool = null;
+    protected ExecutorService processThreadPool = null;
 
     public Builder useSignedStringMinMax(boolean useSignedStringMinMax) {
       this.useSignedStringMinMax = useSignedStringMinMax;
@@ -305,6 +322,16 @@ public class ParquetReadOptions {
       return this;
     }
 
+    public Builder withIOThreadPool(ExecutorService ioThreadPool) {
+      this.ioThreadPool = ioThreadPool;
+      return this;
+    }
+
+    public Builder withProcessThreadPool(ExecutorService processThreadPool) {
+      this.processThreadPool = processThreadPool;
+      return this;
+    }
+
     public Builder set(String key, String value) {
       properties.put(key, value);
       return this;
@@ -333,7 +360,7 @@ public class ParquetReadOptions {
         useSignedStringMinMax, useStatsFilter, useDictionaryFilter, useRecordFilter,
         useColumnIndexFilter, usePageChecksumVerification, useBloomFilter, enableAsyncReader,
         recordFilter, metadataFilter, codecFactory, allocator, maxAllocationSize, properties,
-        fileDecryptionProperties);
+        fileDecryptionProperties, ioThreadPool, processThreadPool);
     }
   }
 }

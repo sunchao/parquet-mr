@@ -127,41 +127,13 @@ public class ParquetFileReader implements Closeable {
 
   public static String PARQUET_READ_PARALLELISM = "parquet.metadata.read.parallelism";
 
-  public static int numProcessors = Runtime.getRuntime().availableProcessors();
-
-  // Thread pool to read column chunk data from disk. Applications should call setAsyncIOThreadPool
-  // to initialize this with their own implementations.
   // Default initialization is useful only for testing
-  public static ExecutorService ioThreadPool = Executors.newCachedThreadPool(
-    r -> new Thread(r, "parquet-io"));
+  public ExecutorService ioThreadPool = null;
 
   // Thread pool to process pages for multiple columns in parallel. Applications should call
   // setAsyncProcessThreadPool to initialize this with their own implementations.
   // Default initialization is useful only for testing
-  public static ExecutorService processThreadPool = Executors.newCachedThreadPool(
-    r -> new Thread(r, "parquet-process"));
-
-  public static void setAsyncIOThreadPool(ExecutorService ioPool, boolean shutdownCurrent) {
-    if (ioThreadPool != null && shutdownCurrent) {
-      ioThreadPool.shutdownNow();
-    }
-    ioThreadPool = ioPool;
-  }
-
-  public static void setAsyncProcessThreadPool(ExecutorService processPool, boolean shutdownCurrent) {
-    if (processThreadPool != null && shutdownCurrent) {
-      processThreadPool.shutdownNow();
-    }
-    processThreadPool = processPool;
-  }
-
-  public static void shutdownAsyncIOThreadPool() {
-    ioThreadPool.shutdownNow();
-  }
-
-  public static void shutdownAsyncProcessThreadPool() {
-    processThreadPool.shutdownNow();
-  }
+  public ExecutorService processThreadPool = null;
 
   private final ParquetMetadataConverter converter;
 
@@ -811,6 +783,8 @@ public class ParquetFileReader implements Closeable {
     this.file = file;
     this.inputStream = file.newStream();
     this.options = options;
+    this.ioThreadPool = options.getIoThreadPool();
+    this.processThreadPool = options.getProcessThreadPool();
     try {
       this.footer = readFooter(file, options, inputStream, converter);
     } catch (Exception e) {
@@ -835,7 +809,7 @@ public class ParquetFileReader implements Closeable {
   }
 
   private boolean isAsyncReaderEnabled(){
-    if (options.isAsyncReaderEnabled() ) {
+    if (options.isAsyncReaderEnabled()) {
       if (ioThreadPool != null && processThreadPool != null) {
         return true;
       } else {
@@ -1573,11 +1547,7 @@ public class ParquetFileReader implements Closeable {
     public BytesInput readAsBytesInput(int size) throws IOException {
       String mode = (isAsyncReaderEnabled())? "ASYNC":"SYNC";
       LOG.debug("{} READ BYTES INPUT: stream {}", mode, stream);
-      if (isAsyncReaderEnabled()) {
-        return BytesInput.from(stream.sliceBuffers(size));
-      } else {
-        return BytesInput.from(stream.sliceBuffers(size));
-      }
+      return BytesInput.from(stream.sliceBuffers(size));
     }
 
     @Override

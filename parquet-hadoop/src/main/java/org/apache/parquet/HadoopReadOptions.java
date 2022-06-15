@@ -30,6 +30,7 @@ import org.apache.parquet.format.converter.ParquetMetadataConverter.MetadataFilt
 import org.apache.parquet.hadoop.util.HadoopCodecs;
 
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
 
 import static org.apache.parquet.hadoop.ParquetInputFormat.COLUMN_INDEX_FILTERING_ENABLED;
 import static org.apache.parquet.hadoop.ParquetInputFormat.DICTIONARY_FILTERING_ENABLED;
@@ -61,12 +62,14 @@ public class HadoopReadOptions extends ParquetReadOptions {
                             int maxAllocationSize,
                             Map<String, String> properties,
                             Configuration conf,
-                            FileDecryptionProperties fileDecryptionProperties) {
+                            FileDecryptionProperties fileDecryptionProperties,
+                            ExecutorService ioThreadPool,
+                            ExecutorService processThreadPool) {
     super(
       useSignedStringMinMax, useStatsFilter, useDictionaryFilter, useRecordFilter,
       useColumnIndexFilter, usePageChecksumVerification, useBloomFilter, enableAsyncReader,
       recordFilter, metadataFilter, codecFactory, allocator, maxAllocationSize, properties,
-      fileDecryptionProperties
+      fileDecryptionProperties, ioThreadPool, processThreadPool
     );
     this.conf = conf;
   }
@@ -131,7 +134,7 @@ public class HadoopReadOptions extends ParquetReadOptions {
         useSignedStringMinMax, useStatsFilter, useDictionaryFilter, useRecordFilter,
         useColumnIndexFilter, usePageChecksumVerification, useBloomFilter, enableAsyncReader,
         recordFilter, metadataFilter, codecFactory, allocator, maxAllocationSize, properties, conf,
-        fileDecryptionProperties);
+        fileDecryptionProperties, ioThreadPool, processThreadPool);
     }
   }
 

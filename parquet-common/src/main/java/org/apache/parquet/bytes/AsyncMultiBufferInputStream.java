@@ -42,7 +42,7 @@ class AsyncMultiBufferInputStream extends MultiBufferInputStream {
   int fetchIndex = 0;
   int readIndex = 0;
   ExecutorService threadPool;
-  LinkedBlockingQueue<Future<Void>> readFutures;
+  Future<Void> readFuture;
   BlockingQueue<ByteBuffer> buffersRead;
   boolean closed = false;
   Exception ioException;
@@ -52,11 +52,10 @@ class AsyncMultiBufferInputStream extends MultiBufferInputStream {
   LongAccumulator maxTimeBlocked = new LongAccumulator(Long::max, 0L);
 
   AsyncMultiBufferInputStream(ExecutorService threadPool, SeekableInputStream fileInputStream,
-    List<ByteBuffer> buffers) {
+      List<ByteBuffer> buffers) {
     super(buffers);
     this.fileInputStream = fileInputStream;
     this.threadPool = threadPool;
-    readFutures = new LinkedBlockingQueue<>(buffers.size());
     buffersRead = new LinkedBlockingQueue<>(buffers.size());
     if (LOG.isDebugEnabled()) {
       LOG.debug("ASYNC: Begin read into buffers ");
@@ -64,8 +63,7 @@ class AsyncMultiBufferInputStream extends MultiBufferInputStream {
         LOG.debug("ASYNC: buffer {} ", buf);
       }
     }
-
-    fetchAll();
+    readFuture = threadPool.submit(new ReadPageDataTask());
   }
 
   private void checkState() {
@@ -77,18 +75,6 @@ class AsyncMultiBufferInputStream extends MultiBufferInputStream {
         throw new RuntimeException(ioException);
       }
     }
-  }
-
-  private void fetchAll() {
-    checkState();
-    try {
-      readFutures.put(
-        threadPool.submit(new ReadPageDataTask(this)));
-    } catch (InterruptedException e) {
-      Thread.currentThread().interrupt();
-      throw new RuntimeException(e);
-    }
-    ;
   }
 
   @Override
@@ -126,58 +112,51 @@ class AsyncMultiBufferInputStream extends MultiBufferInputStream {
     LOG.debug("ASYNC Stream: Blocked: {} {} {}", totalTimeBlocked.longValue() / 1000.0,
       totalCountBlocked.longValue(), maxTimeBlocked.longValue() / 1000.0);
     Future<Void> readResult;
-    while (!readFutures.isEmpty()) {
+    if (readFuture != null) {
       try {
-        readResult = readFutures.poll();
-        readResult.get();
-        if (!readResult.isDone() && !readResult.isCancelled()) {
-          readResult.cancel(true);
+        readFuture.get();
+        if (!readFuture.isDone() && !readFuture.isCancelled()) {
+          readFuture.cancel(true);
         } else {
-          readResult.get(1, TimeUnit.MILLISECONDS);
+          readFuture.get(1, TimeUnit.MILLISECONDS);
         }
       } catch (Exception e) {
         // Do nothing
+      } finally {
+        readFuture = null;
       }
     }
     closed = true;
   }
 
-
-  public static class ReadPageDataTask implements Callable<Void> {
-
-    final AsyncMultiBufferInputStream parent;
-
-    ReadPageDataTask(AsyncMultiBufferInputStream parent) {
-      this.parent = parent;
-    }
-
+  private class ReadPageDataTask implements Callable<Void> {
     public Void call() {
       long startTime = System.nanoTime();
-      for (ByteBuffer buffer : parent.buffers) {
+      for (ByteBuffer buffer : buffers) {
         try {
-          parent.fileInputStream.readFully(buffer);
+          fileInputStream.readFully(buffer);
           buffer.flip();
           long readCompleted = System.nanoTime();
           long timeSpent = readCompleted - startTime;
           LOG.debug("ASYNC Stream: READ - {}", timeSpent / 1000.0);
           long putStart = System.nanoTime();
-          parent.buffersRead.put(buffer);
+          buffersRead.put(buffer);
           long putCompleted = System.nanoTime();
           LOG.debug("ASYNC Stream: FS READ (output) BLOCKED - {}",
             (putCompleted - putStart) / 1000.0);
-          parent.fetchIndex++;
+          fetchIndex++;
         } catch (IOException | InterruptedException e) {
           if (e instanceof InterruptedException) {
             Thread.currentThread().interrupt();
           }
           // Let the parent know there was an exception. checkState will throw an
           // exception if the read task has failed.
-          parent.ioException = e;
+          ioException = e;
           throw new RuntimeException(e);
         }
       }
       return null;
     }
-  } //PageDataReaderTask
+  }
 
 }
