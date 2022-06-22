@@ -20,12 +20,14 @@
 package org.apache.parquet.hadoop.util;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.io.SeekableInputStream;
 import org.apache.parquet.io.InputFile;
 import java.io.IOException;
+import java.util.concurrent.CompletableFuture;
 
 public class HadoopInputFile implements InputFile {
 
@@ -54,7 +56,7 @@ public class HadoopInputFile implements InputFile {
   public Configuration getConfiguration() {
     return conf;
   }
-  
+
   public Path getPath() {
     return stat.getPath();
   }
@@ -66,13 +68,22 @@ public class HadoopInputFile implements InputFile {
 
   @Override
   public SeekableInputStream newStream() throws IOException {
+    FSDataInputStream stream;
+    try {
+      stream = fs.openFile(stat.getPath())
+        .withFileStatus(stat)
+        .build()
+        .get();
+    } catch (Exception e) {
+      throw new IOException("Error when opening file " + stat.getPath(), e);
+    }
     if (stat.getPath().toString().startsWith("s3c")
       || stat.getPath().toString().startsWith("blobc") ) {
       // S3AInputStream is categorized as H1SeekableInputStream
       // also McQueen RangeReadInputStream
-      return new H1SeekableInputStream(fs.open(stat.getPath()), true);
+      return new H1SeekableInputStream(stream, true);
     } else {
-      return HadoopStreams.wrap(fs.open(stat.getPath()));
+      return HadoopStreams.wrap(stream);
     }
   }
 
