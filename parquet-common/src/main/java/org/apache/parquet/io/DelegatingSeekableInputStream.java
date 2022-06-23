@@ -32,7 +32,8 @@ import java.nio.ByteBuffer;
  */
 public abstract class DelegatingSeekableInputStream extends SeekableInputStream {
 
-  private final int COPY_BUFFER_SIZE = 8192;
+  // Use a proper size for buffering reads from cloud storage such as S3
+  private final int COPY_BUFFER_SIZE = 8 * 1024 * 1024;
   private final byte[] temp = new byte[COPY_BUFFER_SIZE];
 
   private final InputStream stream;
