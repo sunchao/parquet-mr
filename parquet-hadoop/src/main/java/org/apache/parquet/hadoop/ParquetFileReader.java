@@ -993,7 +993,7 @@ public class ParquetFileReader implements Closeable {
     ChunkListBuilder builder = new ChunkListBuilder();
     for (ConsecutivePartList consecutiveChunks : allParts) {
       if(isAsyncIOReaderEnabled()) {
-        SeekableInputStream is = file.newStream();
+        SeekableInputStream is = file.newStream(consecutiveChunks.offset, consecutiveChunks.length);
         consecutiveChunks.readAll(is, builder);
         inputStreamList.add(is);
       } else {

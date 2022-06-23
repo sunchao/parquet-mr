@@ -41,4 +41,15 @@ public interface InputFile {
    */
   SeekableInputStream newStream() throws IOException;
 
+  /**
+   * Open a new {@link SeekableInputStream} for the underlying data file,
+   * in the range of '[offset, offset + length)'
+   *
+   * @param offset the offset in the file to read from
+   * @param length the total number of bytes to read
+   * @return a new {@link SeekableInputStream} to read the file
+   * @throws IOException if the stream cannot be opened
+   */
+  SeekableInputStream newStream(long offset, long length) throws IOException;
+
 }

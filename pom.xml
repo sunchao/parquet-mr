@@ -508,6 +508,7 @@
               <exclude>org.apache.parquet.column.values.dictionary.DictionaryValuesWriter#dictionaryByteSize</exclude>
               <exclude>org.apache.parquet.filter2.predicate.FilterPredicate</exclude>
               <exclude>org.apache.parquet.thrift.projection.deprecated.PathGlobPattern</exclude>
+              <exclude>org.apache.parquet.io.InputFile</exclude>
             </excludes>
           </parameter>
         </configuration>
