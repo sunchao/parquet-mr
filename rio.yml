@@ -25,8 +25,8 @@ builds:
         - cd protobuf-3.5.1 && ./autogen.sh && ./configure
         - make -j8 && make install && ldconfig
         - cd ..
-        - wget -nv http://archive.apache.org/dist/thrift/0.15.0/thrift-0.15.0.tar.gz && tar xzf thrift-0.15.0.tar.gz
-        - cd thrift-0.15.0 && chmod +x ./configure
+        - wget -nv http://archive.apache.org/dist/thrift/0.16.0/thrift-0.16.0.tar.gz && tar xzf thrift-0.16.0.tar.gz
+        - cd thrift-0.16.0 && chmod +x ./configure
         - ./configure --disable-libs
         - make -j8 && make install
         - cd ..
@@ -51,8 +51,8 @@ builds:
         - cd protobuf-3.5.1 && ./autogen.sh > /dev/null 2>&1 && ./configure > /dev/null 2>&1
         - make -j8 > /dev/null 2>&1 && make install > /dev/null 2>&1  && ldconfig > /dev/null 2>&1
         - cd ..
-        - wget -nv http://archive.apache.org/dist/thrift/0.15.0/thrift-0.15.0.tar.gz && tar xzf thrift-0.15.0.tar.gz
-        - cd thrift-0.15.0 && chmod +x ./configure
+        - wget -nv http://archive.apache.org/dist/thrift/0.16.0/thrift-0.16.0.tar.gz && tar xzf thrift-0.16.0.tar.gz
+        - cd thrift-0.16.0 && chmod +x ./configure
         - ./configure --disable-libs > /dev/null 2>&1
         - make -j8 > /dev/null 2>&1 && make install > /dev/null 2>&1
         - cd ..
@@ -81,8 +81,8 @@ builds:
         - cd protobuf-3.5.1 && ./autogen.sh && ./configure
         - make -j8 && make install && ldconfig
         - cd ..
-        - wget -nv http://archive.apache.org/dist/thrift/0.15.0/thrift-0.15.0.tar.gz && tar xzf thrift-0.15.0.tar.gz
-        - cd thrift-0.15.0 && chmod +x ./configure
+        - wget -nv http://archive.apache.org/dist/thrift/0.16.0/thrift-0.16.0.tar.gz && tar xzf thrift-0.16.0.tar.gz
+        - cd thrift-0.16.0 && chmod +x ./configure
         - ./configure --disable-libs
         - make -j8 && make install
         - cd ..
@@ -111,8 +111,8 @@ builds:
         - cd protobuf-3.5.1 && ./autogen.sh > /dev/null 2>&1 && ./configure > /dev/null 2>&1
         - make -j8 > /dev/null 2>&1 && make install > /dev/null 2>&1  && ldconfig > /dev/null 2>&1
         - cd ..
-        - wget -nv http://archive.apache.org/dist/thrift/0.15.0/thrift-0.15.0.tar.gz && tar xzf thrift-0.15.0.tar.gz
-        - cd thrift-0.15.0 && chmod +x ./configure
+        - wget -nv http://archive.apache.org/dist/thrift/0.16.0/thrift-0.16.0.tar.gz && tar xzf thrift-0.16.0.tar.gz
+        - cd thrift-0.16.0 && chmod +x ./configure
         - ./configure --disable-libs > /dev/null 2>&1
         - make -j8 > /dev/null 2>&1 && make install > /dev/null 2>&1
         - cd ..
