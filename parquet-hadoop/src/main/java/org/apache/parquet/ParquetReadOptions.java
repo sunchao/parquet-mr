@@ -44,6 +44,9 @@ public class ParquetReadOptions {
   private static final int ALLOCATION_SIZE_DEFAULT = 8388608; // 8MB
   private static final boolean PAGE_VERIFY_CHECKSUM_ENABLED_DEFAULT = false;
   private static final boolean BLOOM_FILTER_ENABLED_DEFAULT = true;
+  private static final boolean ENABLE_PARALLEL_IO_DEFAULT = false;
+
+  private static final int IO_THREAD_POOL_SIZE_DEFAULT = 16;
   private static final boolean ENABLE_ASYNC_IO_READER_DEFAULT = false;
   private static final boolean ENABLE_PARALLEL_COLUMN_READER_DEFAULT = false;
 
@@ -54,6 +57,9 @@ public class ParquetReadOptions {
   private final boolean useColumnIndexFilter;
   private final boolean usePageChecksumVerification;
   private final boolean useBloomFilter;
+  private final boolean enableParallelIO;
+
+  private final int ioThreadPoolSize;
   private final boolean enableAsyncIOReader;
   private final boolean enableParallelColumnReader;
   private final FilterCompat.Filter recordFilter;
@@ -71,6 +77,8 @@ public class ParquetReadOptions {
                      boolean useColumnIndexFilter,
                      boolean usePageChecksumVerification,
                      boolean useBloomFilter,
+                     boolean enableParallelIO,
+                     int ioThreadPoolSize,
                      boolean enableAsyncIOReader,
                      boolean enableParallelColumnReader,
                      FilterCompat.Filter recordFilter,
@@ -87,7 +95,9 @@ public class ParquetReadOptions {
     this.useColumnIndexFilter = useColumnIndexFilter;
     this.usePageChecksumVerification = usePageChecksumVerification;
     this.useBloomFilter = useBloomFilter;
+    this.enableParallelIO = enableParallelIO;
     this.enableAsyncIOReader = enableAsyncIOReader;
+    this.ioThreadPoolSize = ioThreadPoolSize;
     this.enableParallelColumnReader = enableParallelColumnReader;
     this.recordFilter = recordFilter;
     this.metadataFilter = metadataFilter;
@@ -122,6 +132,13 @@ public class ParquetReadOptions {
     return useBloomFilter;
   }
 
+  public boolean isParallelIOEnabled() {
+    return enableParallelIO;
+  }
+
+  public int getIOThreadPoolSize() {
+    return ioThreadPoolSize;
+  }
   public boolean isAsyncIOReaderEnabled() {
     return enableAsyncIOReader;
   }
@@ -184,6 +201,8 @@ public class ParquetReadOptions {
     protected boolean useColumnIndexFilter = COLUMN_INDEX_FILTERING_ENABLED_DEFAULT;
     protected boolean usePageChecksumVerification = PAGE_VERIFY_CHECKSUM_ENABLED_DEFAULT;
     protected boolean useBloomFilter = BLOOM_FILTER_ENABLED_DEFAULT;
+    protected boolean enableParallelIO = ENABLE_PARALLEL_IO_DEFAULT;
+    protected int ioThreadPoolSize = IO_THREAD_POOL_SIZE_DEFAULT;
     protected boolean enableAsyncIOReader = ENABLE_ASYNC_IO_READER_DEFAULT;
     protected boolean enableParallelColumnReader = ENABLE_PARALLEL_COLUMN_READER_DEFAULT;
     protected FilterCompat.Filter recordFilter = null;
@@ -264,6 +283,16 @@ public class ParquetReadOptions {
       return this;
     }
 
+    public Builder enableParallelIO(boolean enableParallelIO) {
+      this.enableParallelIO = enableParallelIO;
+      return this;
+    }
+
+    public Builder withIoThreadPoolSize(int size) {
+      this.ioThreadPoolSize = size;
+      return this;
+    }
+
     public Builder enableAsyncIOReader(boolean enableAsyncIOReader) {
       this.enableAsyncIOReader = enableAsyncIOReader;
       return this;
@@ -331,6 +360,8 @@ public class ParquetReadOptions {
       useRecordFilter(options.useRecordFilter);
       withRecordFilter(options.recordFilter);
       withMetadataFilter(options.metadataFilter);
+      enableParallelIO(options.enableParallelIO);
+      withIoThreadPoolSize(options.ioThreadPoolSize);
       enableAsyncIOReader(options.enableAsyncIOReader);
       enableParallelColumnReader(options.enableParallelColumnReader);
       withCodecFactory(options.codecFactory);
@@ -346,9 +377,10 @@ public class ParquetReadOptions {
     public ParquetReadOptions build() {
       return new ParquetReadOptions(
         useSignedStringMinMax, useStatsFilter, useDictionaryFilter, useRecordFilter,
-        useColumnIndexFilter, usePageChecksumVerification, useBloomFilter, enableAsyncIOReader,
-        enableParallelColumnReader, recordFilter, metadataFilter, codecFactory, allocator,
-        maxAllocationSize, properties, fileDecryptionProperties);
+        useColumnIndexFilter, usePageChecksumVerification, useBloomFilter, enableParallelIO,
+        ioThreadPoolSize, enableAsyncIOReader, enableParallelColumnReader, recordFilter,
+        metadataFilter, codecFactory, allocator, maxAllocationSize, properties,
+        fileDecryptionProperties);
     }
   }
 }
