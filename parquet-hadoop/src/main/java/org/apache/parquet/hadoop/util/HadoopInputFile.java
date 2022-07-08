@@ -61,6 +61,10 @@ public class HadoopInputFile implements InputFile {
     return stat.getPath();
   }
 
+  public FileSystem getFileSystem() {
+    return fs;
+  }
+
   @Override
   public long getLength() {
     return stat.getLen();

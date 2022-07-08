@@ -59,6 +59,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.fs.statistics.IOStatistics;
+import org.apache.hadoop.fs.statistics.IOStatisticsSource;
 import org.apache.parquet.HadoopReadOptions;
 import org.apache.parquet.ParquetReadOptions;
 import org.apache.parquet.bytes.ByteBufferInputStream;
@@ -915,6 +917,30 @@ public class ParquetFileReader implements Closeable {
 
   public String getFile() {
     return file.toString();
+  }
+
+  /**
+   * Returns the IO statistics for this reader, or null if no stats are available.
+   * Ideally, this should be called before the file reader is to be closed, to gather the final
+   * statistics for IO operations.
+   */
+  public IOStatistics getIOStatistics() {
+    if (file instanceof HadoopInputFile) {
+      HadoopInputFile hadoopFile = (HadoopInputFile) file;
+      FileSystem fs = hadoopFile.getFileSystem();
+      if (fs instanceof IOStatisticsSource) {
+        return ((IOStatisticsSource) fs).getIOStatistics();
+      }
+    }
+    return null;
+  }
+
+  public FileSystem getFileSystem() {
+    if (file instanceof HadoopInputFile) {
+      HadoopInputFile hadoopFile = (HadoopInputFile) file;
+      return hadoopFile.getFileSystem();
+    }
+    return null;
   }
 
   private List<BlockMetaData> filterRowGroups(List<BlockMetaData> blocks) throws IOException {
