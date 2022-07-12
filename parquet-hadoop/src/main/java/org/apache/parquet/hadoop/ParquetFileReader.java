@@ -1022,14 +1022,28 @@ public class ParquetFileReader implements Closeable {
     // actually read all the chunks
     ChunkListBuilder builder = new ChunkListBuilder();
     for (ConsecutivePartList consecutiveChunks : allParts) {
-      if(isAsyncIOReaderEnabled()) {
+      if (isAsyncIOReaderEnabled()) {
         SeekableInputStream is = file.newStream(consecutiveChunks.offset, consecutiveChunks.length);
         consecutiveChunks.readAll(is, builder);
         inputStreamList.add(is);
       } else if (isParallelIOEnabled()) {
+        long start = System.nanoTime();
         consecutiveChunks.readAllParallel(inputStream, builder);
+        long totalSec = (System.nanoTime() - start) / 1000_000_000 ;
+        if (totalSec > 0) {
+          long bps = consecutiveChunks.length / totalSec;
+          LOG.info("Parallel read took {}s, data size (in bytes): {}, " +
+            "bytes per second: {}", totalSec, consecutiveChunks.length, bps);
+        }
       } else {
+        long start = System.nanoTime();
         consecutiveChunks.readAll(inputStream, builder);
+        long totalSec = (System.nanoTime() - start) / 1000_000_000 ;
+        if (totalSec > 0) {
+          long bps = consecutiveChunks.length / totalSec;
+          LOG.info("Sequential read took {}s, data size (in bytes): {}, " +
+            "bytes per second: {}", totalSec, consecutiveChunks.length, bps);
+        }
       }
     }
     for (Chunk chunk : builder.build()) {
