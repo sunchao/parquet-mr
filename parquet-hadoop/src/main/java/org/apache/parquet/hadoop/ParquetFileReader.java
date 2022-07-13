@@ -1906,9 +1906,19 @@ public class ParquetFileReader implements Closeable {
         if(nBuffers == 0) {
           continue;
         }
+
+        // Find the total number of bytes to read for the current thread
+        long tmp = 0;
+        for (int i = 0; i < nBuffers; i++) {
+          int bufNo = bufferIndex + i;
+          if (bufNo >= buffers.size()) break;
+          tmp += buffers.get(bufNo).capacity();
+        }
+        final long length = tmp;
+
         futures.add(
         threadPool.submit(() -> {
-          try (SeekableInputStream inputStream = file.newStream()) {
+          try (SeekableInputStream inputStream = file.newStream(pos, length)) {
             inputStream.seek(pos);
             long curPos = pos;
             for (int i = 0; i < nBuffers; i++) {
