@@ -133,15 +133,25 @@ public class ParquetFileReader implements Closeable {
 
   // Thread pool to read column chunk data from disk. Applications should call setAsyncIOThreadPool
   // to initialize this with their own implementations.
-  // Default initialization is useful only for testing
-  public static ExecutorService ioThreadPool = Executors.newCachedThreadPool(
-    r -> new Thread(r, "parquet-io"));
+  public static ExecutorService ioThreadPool = null;
 
   // Thread pool to process pages for multiple columns in parallel. Applications should call
   // setAsyncProcessThreadPool to initialize this with their own implementations.
-  // Default initialization is useful only for testing
-  public static ExecutorService processThreadPool = Executors.newCachedThreadPool(
-    r -> new Thread(r, "parquet-process"));
+  public static ExecutorService processThreadPool = null;
+
+  public static void setDefaultAsyncIOThreadPool(boolean isAsyncIOReaderEnabled) {
+    if (isAsyncIOReaderEnabled && ioThreadPool == null) {
+      // Default initialization is useful only for testing
+      ioThreadPool = Executors.newCachedThreadPool(r -> new Thread(r, "parquet-io"));
+    }
+  }
+
+  public static void setDefaultAsyncProcessThreadPool(boolean isParallelIOEnabled) {
+    if (isParallelIOEnabled && processThreadPool == null) {
+      // Default initialization is useful only for testing
+      processThreadPool = Executors.newCachedThreadPool(r -> new Thread(r, "parquet-process"));
+    }
+  }
 
   public static void setAsyncIOThreadPool(ExecutorService ioPool, boolean shutdownCurrent) {
     if (ioThreadPool != null && shutdownCurrent) {
@@ -762,6 +772,8 @@ public class ParquetFileReader implements Closeable {
       paths.put(ColumnPath.get(col.getPath()), col);
     }
     this.crc = options.usePageChecksumVerification() ? new CRC32() : null;
+    setDefaultAsyncIOThreadPool(options.isAsyncIOReaderEnabled());
+    setDefaultAsyncProcessThreadPool(options.isParallelIOEnabled());
   }
 
   /**
@@ -806,6 +818,8 @@ public class ParquetFileReader implements Closeable {
       paths.put(ColumnPath.get(col.getPath()), col);
     }
     this.crc = options.usePageChecksumVerification() ? new CRC32() : null;
+    setDefaultAsyncIOThreadPool(options.isAsyncIOReaderEnabled());
+    setDefaultAsyncProcessThreadPool(options.isParallelIOEnabled());
   }
 
   public ParquetFileReader(InputFile file, ParquetReadOptions options) throws IOException {
@@ -834,6 +848,8 @@ public class ParquetFileReader implements Closeable {
       paths.put(ColumnPath.get(col.getPath()), col);
     }
     this.crc = options.usePageChecksumVerification() ? new CRC32() : null;
+    setDefaultAsyncIOThreadPool(options.isAsyncIOReaderEnabled());
+    setDefaultAsyncProcessThreadPool(options.isParallelIOEnabled());
   }
 
   private boolean isParallelIOEnabled(){
