@@ -49,6 +49,7 @@ public class ParquetReadOptions {
   private static final int IO_THREAD_POOL_SIZE_DEFAULT = 16;
   private static final boolean ENABLE_ASYNC_IO_READER_DEFAULT = false;
   private static final boolean ENABLE_PARALLEL_COLUMN_READER_DEFAULT = false;
+  private static final boolean ENABLE_IO_STATS_DEFAULT = false;
 
   private final boolean useSignedStringMinMax;
   private final boolean useStatsFilter;
@@ -62,6 +63,7 @@ public class ParquetReadOptions {
   private final int ioThreadPoolSize;
   private final boolean enableAsyncIOReader;
   private final boolean enableParallelColumnReader;
+  private final boolean enableIOStats;
   private final FilterCompat.Filter recordFilter;
   private final ParquetMetadataConverter.MetadataFilter metadataFilter;
   private final CompressionCodecFactory codecFactory;
@@ -81,6 +83,7 @@ public class ParquetReadOptions {
                      int ioThreadPoolSize,
                      boolean enableAsyncIOReader,
                      boolean enableParallelColumnReader,
+                     boolean enableIOStats,
                      FilterCompat.Filter recordFilter,
                      ParquetMetadataConverter.MetadataFilter metadataFilter,
                      CompressionCodecFactory codecFactory,
@@ -99,6 +102,7 @@ public class ParquetReadOptions {
     this.enableAsyncIOReader = enableAsyncIOReader;
     this.ioThreadPoolSize = ioThreadPoolSize;
     this.enableParallelColumnReader = enableParallelColumnReader;
+    this.enableIOStats = enableIOStats;
     this.recordFilter = recordFilter;
     this.metadataFilter = metadataFilter;
     this.codecFactory = codecFactory;
@@ -145,6 +149,10 @@ public class ParquetReadOptions {
 
   public boolean isParallelColumnReaderEnabled() {
     return enableParallelColumnReader;
+  }
+
+  public boolean isIOStatsEnabled() {
+    return enableIOStats;
   }
 
   public boolean usePageChecksumVerification() {
@@ -205,6 +213,7 @@ public class ParquetReadOptions {
     protected int ioThreadPoolSize = IO_THREAD_POOL_SIZE_DEFAULT;
     protected boolean enableAsyncIOReader = ENABLE_ASYNC_IO_READER_DEFAULT;
     protected boolean enableParallelColumnReader = ENABLE_PARALLEL_COLUMN_READER_DEFAULT;
+    protected boolean enableIOStats = ENABLE_IO_STATS_DEFAULT;
     protected FilterCompat.Filter recordFilter = null;
     protected ParquetMetadataConverter.MetadataFilter metadataFilter = NO_FILTER;
     // the page size parameter isn't used when only using the codec factory to get decompressors
@@ -303,6 +312,11 @@ public class ParquetReadOptions {
       return this;
     }
 
+    public Builder enableIOStats(boolean enableIOStats) {
+      this.enableIOStats = enableIOStats;
+      return this;
+    }
+
     public Builder withRecordFilter(FilterCompat.Filter rowGroupFilter) {
       this.recordFilter = rowGroupFilter;
       return this;
@@ -364,6 +378,7 @@ public class ParquetReadOptions {
       withIoThreadPoolSize(options.ioThreadPoolSize);
       enableAsyncIOReader(options.enableAsyncIOReader);
       enableParallelColumnReader(options.enableParallelColumnReader);
+      enableIOStats(options.enableIOStats);
       withCodecFactory(options.codecFactory);
       withAllocator(options.allocator);
       withPageChecksumVerification(options.usePageChecksumVerification);
@@ -378,8 +393,8 @@ public class ParquetReadOptions {
       return new ParquetReadOptions(
         useSignedStringMinMax, useStatsFilter, useDictionaryFilter, useRecordFilter,
         useColumnIndexFilter, usePageChecksumVerification, useBloomFilter, enableParallelIO,
-        ioThreadPoolSize, enableAsyncIOReader, enableParallelColumnReader, recordFilter,
-        metadataFilter, codecFactory, allocator, maxAllocationSize, properties,
+        ioThreadPoolSize, enableAsyncIOReader, enableParallelColumnReader, enableIOStats,
+        recordFilter, metadataFilter, codecFactory, allocator, maxAllocationSize, properties,
         fileDecryptionProperties);
     }
   }

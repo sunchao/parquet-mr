@@ -60,6 +60,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.fs.statistics.IOStatistics;
+import org.apache.hadoop.fs.statistics.IOStatisticsLogging;
 import org.apache.hadoop.fs.statistics.IOStatisticsSource;
 import org.apache.parquet.HadoopReadOptions;
 import org.apache.parquet.ParquetReadOptions;
@@ -111,6 +112,7 @@ import org.apache.parquet.internal.filter2.columnindex.ColumnIndexFilter;
 import org.apache.parquet.internal.filter2.columnindex.ColumnIndexStore;
 import org.apache.parquet.internal.filter2.columnindex.RowRanges;
 import org.apache.parquet.internal.hadoop.metadata.IndexReference;
+import org.apache.parquet.io.DelegatingSeekableInputStream;
 import org.apache.parquet.io.InputFile;
 import org.apache.parquet.io.ParquetDecodingException;
 import org.apache.parquet.io.SeekableInputStream;
@@ -1043,22 +1045,31 @@ public class ParquetFileReader implements Closeable {
         consecutiveChunks.readAll(is, builder);
         inputStreamList.add(is);
       } else if (isParallelIOEnabled()) {
-        long start = System.nanoTime();
+        long startTime = System.nanoTime();
         consecutiveChunks.readAllParallel(inputStream, builder);
-        long totalSec = (System.nanoTime() - start) / 1000_000_000 ;
-        if (totalSec > 0) {
-          long bps = consecutiveChunks.length / totalSec;
-          LOG.info("Parallel read took {}s, data size (in bytes): {}, " +
-            "bytes per second: {}", totalSec, consecutiveChunks.length, bps);
+        long totalTimeNanos = System.nanoTime() - startTime;
+        if (totalTimeNanos > 0) {
+          long bps = consecutiveChunks.length * 1000_000_000 / totalTimeNanos;
+          LOG.info("Parallel read took {}ms, data size (in bytes): {}, " +
+            "bytes per second: {}", totalTimeNanos / 1000_000, consecutiveChunks.length, bps);
         }
       } else {
-        long start = System.nanoTime();
+        long startTime = System.nanoTime();
         consecutiveChunks.readAll(inputStream, builder);
-        long totalSec = (System.nanoTime() - start) / 1000_000_000 ;
-        if (totalSec > 0) {
-          long bps = consecutiveChunks.length / totalSec;
-          LOG.info("Sequential read took {}s, data size (in bytes): {}, " +
-            "bytes per second: {}", totalSec, consecutiveChunks.length, bps);
+        long totalTimeNanos = System.nanoTime() - startTime;
+        if (totalTimeNanos > 0) {
+          long bps = consecutiveChunks.length * 1000_000_000 / totalTimeNanos;
+          LOG.info("Sequential read took {}ms, data size (in bytes): {}, " +
+            "bytes per second: {}", totalTimeNanos / 1000_000, consecutiveChunks.length, bps);
+        }
+
+        if (options.isIOStatsEnabled() && inputStream instanceof DelegatingSeekableInputStream) {
+          InputStream wrappedStream = ((DelegatingSeekableInputStream) inputStream).getStream();
+          if (wrappedStream instanceof IOStatisticsSource) {
+            IOStatistics stats = ((IOStatisticsSource) wrappedStream).getIOStatistics();
+            String statsString = IOStatisticsLogging.ioStatisticsToPrettyString(stats);
+            LOG.info("IO statistics for sequential read: {}", statsString);
+          }
         }
       }
     }
@@ -1933,25 +1944,45 @@ public class ParquetFileReader implements Closeable {
         final long length = tmp;
 
         futures.add(
-        threadPool.submit(() -> {
-          try (SeekableInputStream inputStream = file.newStream(pos, length)) {
-            inputStream.seek(pos);
-            long curPos = pos;
-            for (int i = 0; i < nBuffers; i++) {
-              int bufNo = bufferIndex + i;
-              if (bufNo >= buffers.size()) {
-                break;
+          threadPool.submit(() -> {
+            try (SeekableInputStream inputStream = file.newStream(pos, length)) {
+              long startTime = System.nanoTime();
+              inputStream.seek(pos);
+              long curPos = pos;
+              for (int i = 0; i < nBuffers; i++) {
+                int bufNo = bufferIndex + i;
+                if (bufNo >= buffers.size()) {
+                  break;
+                }
+                ByteBuffer buffer = buffers.get(bufNo);
+                LOG.debug("Thread: {} Offset: {} Buffer: {} Size: {}", threadIndex, curPos, bufNo,
+                  buffer.capacity());
+                curPos += buffer.capacity();
+                inputStream.readFully(buffer);
+                buffer.flip();
+              } // for
+
+              if (options.isIOStatsEnabled()) {
+                long totalTimeNanos = System.nanoTime() - startTime;
+                if (totalTimeNanos > 0) {
+                  long bps = (curPos - pos) * 1000_000_000 / totalTimeNanos;
+                  LOG.info("Thread {} took {}ms to read {} bytes, bps = {}",
+                    threadIndex, totalTimeNanos / 1000_000, curPos - pos, bps);
+                }
+
+                if (inputStream instanceof DelegatingSeekableInputStream) {
+                  InputStream wrappedStream =
+                    ((DelegatingSeekableInputStream) inputStream).getStream();
+                  if (wrappedStream instanceof IOStatisticsSource) {
+                    IOStatistics stats = ((IOStatisticsSource) wrappedStream).getIOStatistics();
+                    String statsString = IOStatisticsLogging.ioStatisticsToPrettyString(stats);
+                    LOG.info("IO statistics for thread {}: {}", threadIndex, statsString);
+                  }
+                }
               }
-              ByteBuffer buffer = buffers.get(bufNo);
-              LOG.debug("Thread: {} Offset: {} Buffer: {} Size: {}", threadIndex, curPos, bufNo,
-                buffer.capacity());
-              curPos+=buffer.capacity();
-              inputStream.readFully(buffer);
-              buffer.flip();
-            } // for
-          } // try
-          return null;
-        }));
+            } // try
+            return null;
+          }));
       }
 
       for (Future<Void> future : futures) {

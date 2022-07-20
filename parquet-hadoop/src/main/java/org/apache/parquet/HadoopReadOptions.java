@@ -35,6 +35,7 @@ import static org.apache.parquet.hadoop.ParquetInputFormat.COLUMN_INDEX_FILTERIN
 import static org.apache.parquet.hadoop.ParquetInputFormat.DICTIONARY_FILTERING_ENABLED;
 import static org.apache.parquet.hadoop.ParquetInputFormat.BLOOM_FILTERING_ENABLED;
 import static org.apache.parquet.hadoop.ParquetInputFormat.ENABLE_ASYNC_IO_READER;
+import static org.apache.parquet.hadoop.ParquetInputFormat.ENABLE_IO_STATS;
 import static org.apache.parquet.hadoop.ParquetInputFormat.ENABLE_PARALLEL_COLUMN_READER;
 import static org.apache.parquet.hadoop.ParquetInputFormat.ENABLE_PARALLEL_IO;
 import static org.apache.parquet.hadoop.ParquetInputFormat.IO_THREAD_POOL_SIZE;
@@ -60,6 +61,7 @@ public class HadoopReadOptions extends ParquetReadOptions {
                             int ioThreadPoolSize,
                             boolean enableAsyncIOReader,
                             boolean enableParallelColumnReader,
+                            boolean enableIOStats,
                             FilterCompat.Filter recordFilter,
                             MetadataFilter metadataFilter,
                             CompressionCodecFactory codecFactory,
@@ -71,8 +73,8 @@ public class HadoopReadOptions extends ParquetReadOptions {
     super(
       useSignedStringMinMax, useStatsFilter, useDictionaryFilter, useRecordFilter,
       useColumnIndexFilter, usePageChecksumVerification, useBloomFilter, enableParallelIO,
-      ioThreadPoolSize, enableAsyncIOReader, enableParallelColumnReader, recordFilter,
-      metadataFilter, codecFactory, allocator, maxAllocationSize, properties,
+      ioThreadPoolSize, enableAsyncIOReader, enableParallelColumnReader, enableIOStats,
+      recordFilter, metadataFilter, codecFactory, allocator, maxAllocationSize, properties,
       fileDecryptionProperties
     );
     this.conf = conf;
@@ -122,6 +124,7 @@ public class HadoopReadOptions extends ParquetReadOptions {
       withIoThreadPoolSize(conf.getInt(IO_THREAD_POOL_SIZE, 16));
       enableAsyncIOReader(conf.getBoolean(ENABLE_ASYNC_IO_READER, false));
       enableParallelColumnReader(conf.getBoolean(ENABLE_PARALLEL_COLUMN_READER, false));
+      enableIOStats(conf.getBoolean(ENABLE_IO_STATS, false));
       withCodecFactory(HadoopCodecs.newFactory(conf, 0));
       withRecordFilter(getFilter(conf));
       withMaxAllocationInBytes(conf.getInt(ALLOCATION_SIZE, 8388608));
@@ -140,8 +143,8 @@ public class HadoopReadOptions extends ParquetReadOptions {
       return new HadoopReadOptions(
         useSignedStringMinMax, useStatsFilter, useDictionaryFilter, useRecordFilter,
         useColumnIndexFilter, usePageChecksumVerification, useBloomFilter, enableParallelIO,
-        ioThreadPoolSize, enableAsyncIOReader, enableParallelColumnReader, recordFilter,
-        metadataFilter, codecFactory, allocator, maxAllocationSize, properties, conf,
+        ioThreadPoolSize, enableAsyncIOReader, enableParallelColumnReader, enableIOStats,
+        recordFilter, metadataFilter, codecFactory, allocator, maxAllocationSize, properties, conf,
         fileDecryptionProperties);
     }
   }

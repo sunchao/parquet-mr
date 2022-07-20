@@ -146,6 +146,9 @@ public class ParquetInputFormat<T> extends FileInputFormat<Void, T> {
 
   public static final String ENABLE_PARALLEL_IO = "parquet.read.parallel.io.enabled";
   public static final String IO_THREAD_POOL_SIZE = "parquet.read.parallel.io.threadPoolSize";
+
+  public static final String ENABLE_IO_STATS = "parquet.io.stats.enabled";
+
   /**
    * key to configure whether parquet reader should use async file reads. If set to true, the
    * parquet file reader will not block after issuing calls to get data from the file system.
