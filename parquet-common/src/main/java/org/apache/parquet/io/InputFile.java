@@ -50,6 +50,8 @@ public interface InputFile {
    * @return a new {@link SeekableInputStream} to read the file
    * @throws IOException if the stream cannot be opened
    */
-  SeekableInputStream newStream(long offset, long length) throws IOException;
+  default SeekableInputStream newStream(long offset, long length) throws IOException {
+    return newStream();
+  }
 
 }

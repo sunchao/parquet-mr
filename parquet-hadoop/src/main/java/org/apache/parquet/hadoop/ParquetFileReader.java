@@ -946,7 +946,7 @@ public class ParquetFileReader implements Closeable {
     if (file instanceof HadoopInputFile) {
       HadoopInputFile hadoopFile = (HadoopInputFile) file;
       FileSystem fs = hadoopFile.getFileSystem();
-      if (fs instanceof IOStatisticsSource) {
+      if (HadoopInputFile.isHadoop3() && fs instanceof IOStatisticsSource) {
         return ((IOStatisticsSource) fs).getIOStatistics();
       }
     }
@@ -1065,7 +1065,7 @@ public class ParquetFileReader implements Closeable {
 
         if (options.isIOStatsEnabled() && inputStream instanceof DelegatingSeekableInputStream) {
           InputStream wrappedStream = ((DelegatingSeekableInputStream) inputStream).getStream();
-          if (wrappedStream instanceof IOStatisticsSource) {
+          if (HadoopInputFile.isHadoop3() && wrappedStream instanceof IOStatisticsSource) {
             IOStatistics stats = ((IOStatisticsSource) wrappedStream).getIOStatistics();
             String statsString = IOStatisticsLogging.ioStatisticsToPrettyString(stats);
             LOG.info("IO statistics for sequential read: {}", statsString);
@@ -1973,7 +1973,7 @@ public class ParquetFileReader implements Closeable {
                 if (inputStream instanceof DelegatingSeekableInputStream) {
                   InputStream wrappedStream =
                     ((DelegatingSeekableInputStream) inputStream).getStream();
-                  if (wrappedStream instanceof IOStatisticsSource) {
+                  if (HadoopInputFile.isHadoop3() && wrappedStream instanceof IOStatisticsSource) {
                     IOStatistics stats = ((IOStatisticsSource) wrappedStream).getIOStatistics();
                     String statsString = IOStatisticsLogging.ioStatisticsToPrettyString(stats);
                     LOG.info("IO statistics for thread {}: {}", threadIndex, statsString);

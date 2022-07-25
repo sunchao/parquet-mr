@@ -19,17 +19,23 @@
 
 package org.apache.parquet.hadoop.util;
 
+import org.apache.hadoop.classification.VisibleForTesting;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FutureDataInputStreamBuilder;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.util.VersionInfo;
 import org.apache.parquet.io.SeekableInputStream;
 import org.apache.parquet.io.InputFile;
 import java.io.IOException;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class HadoopInputFile implements InputFile {
+  private static final String MAJOR_MINOR_REGEX = "^(\\d+)\\.(\\d+)(\\..*)?$";
+  private static final Pattern HADOOP3_MATCHER = Pattern.compile(MAJOR_MINOR_REGEX);
 
   private final FileSystem fs;
   private final FileStatus stat;
@@ -45,6 +51,20 @@ public class HadoopInputFile implements InputFile {
       throws IOException {
     FileSystem fs = stat.getPath().getFileSystem(conf);
     return new HadoopInputFile(fs, stat, conf);
+  }
+
+  public static boolean isHadoop3() {
+    String version = VersionInfo.getVersion();
+    return isHadoop3(version);
+  }
+
+  @VisibleForTesting
+  static boolean isHadoop3(String version) {
+    Matcher matcher = HADOOP3_MATCHER.matcher(version);
+    if (matcher.matches()) {
+      return matcher.group(1).equals("3");
+    }
+    return false;
   }
 
   private HadoopInputFile(FileSystem fs, FileStatus stat, Configuration conf) {
@@ -74,10 +94,14 @@ public class HadoopInputFile implements InputFile {
   public SeekableInputStream newStream() throws IOException {
     FSDataInputStream stream;
     try {
-      stream = fs.openFile(stat.getPath())
-        .withFileStatus(stat)
-        .build()
-        .get();
+      if (isHadoop3()) {
+        stream = fs.openFile(stat.getPath())
+          .withFileStatus(stat)
+          .build()
+          .get();
+      } else {
+        stream = fs.open(stat.getPath());
+      }
     } catch (Exception e) {
       throw new IOException("Error when opening file " + stat.getPath(), e);
     }
@@ -94,23 +118,28 @@ public class HadoopInputFile implements InputFile {
   @Override
   public SeekableInputStream newStream(long offset, long length) throws IOException {
     try {
-      FutureDataInputStreamBuilder inputStreamBuilder = fs
-        .openFile(stat.getPath())
-        .withFileStatus(stat);
+      FSDataInputStream stream;
+      if (isHadoop3()) {
+        FutureDataInputStreamBuilder inputStreamBuilder = fs
+          .openFile(stat.getPath())
+          .withFileStatus(stat);
 
-      if (stat.getPath().toString().startsWith("s3a")) {
-        // Switch to random S3 input policy so that we don't do sequential read on the entire
-        // S3 object. By default, the policy is normal which does sequential read until a back
-        // seek happens, which in our case will never happen.
-        //
-        // Also set read ahead length equal to the column chunk length so we don't have to open
-        // multiple S3 http connections.
-        inputStreamBuilder = inputStreamBuilder
-          .opt("fs.s3a.experimental.input.fadvise", "random")
-          .opt("fs.s3a.readahead.range", Long.toString(length));
+        if (stat.getPath().toString().startsWith("s3a")) {
+          // Switch to random S3 input policy so that we don't do sequential read on the entire
+          // S3 object. By default, the policy is normal which does sequential read until a back
+          // seek happens, which in our case will never happen.
+          //
+          // Also set read ahead length equal to the column chunk length so we don't have to open
+          // multiple S3 http connections.
+          inputStreamBuilder = inputStreamBuilder
+            .opt("fs.s3a.experimental.input.fadvise", "random")
+            .opt("fs.s3a.readahead.range", Long.toString(length));
+        }
+
+        stream = inputStreamBuilder.build().get();
+      } else {
+        stream = fs.open(stat.getPath());
       }
-
-      FSDataInputStream stream = inputStreamBuilder.build().get();
       return HadoopStreams.wrap(stream);
     } catch (Exception e) {
       throw new IOException("Error when opening file " + stat.getPath() +
