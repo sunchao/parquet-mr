@@ -26,6 +26,8 @@ import java.util.Optional;
 import java.util.PrimitiveIterator;
 
 import java.util.concurrent.LinkedBlockingDeque;
+
+import org.apache.parquet.Preconditions;
 import org.apache.parquet.bytes.BytesInput;
 import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.column.page.DataPage;
@@ -124,6 +126,8 @@ public class ColumnChunkPageReadStore implements PageReadStore, DictionaryPageRe
     }
 
     public int getPageValueCount() {
+      Preconditions.checkState(compressedPages.size() > 1,
+        "compressedPages should have at least 2 elements, but found " + compressedPages.size());
       final Optional<DataPage> compressedPage;
       try {
         // Since there is no blocking peek, take the head and added it back
@@ -143,6 +147,9 @@ public class ColumnChunkPageReadStore implements PageReadStore, DictionaryPageRe
     @Override
     public DataPage readPage() {
       final DataPage compressedPage;
+      if (compressedPages.isEmpty()) {
+        return null;
+      }
       try {
         compressedPage = compressedPages.take().orElse(null);
       } catch (InterruptedException e) {
