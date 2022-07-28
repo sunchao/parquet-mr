@@ -82,6 +82,11 @@ public class ColumnChunkPageReadStore implements PageReadStore, DictionaryPageRe
 
     private final ParquetFileReader.PageReader pageReader;
 
+    /**
+     * Whether we've finished reading all the pages in this reader store.
+     */
+    private boolean isFinished;
+
     ColumnChunkPageReader(BytesInputDecompressor decompressor,
         LinkedBlockingDeque<Optional<DataPage>> compressedPages,
         DictionaryPage compressedDictionaryPage, OffsetIndex offsetIndex, long valueCount,
@@ -93,10 +98,9 @@ public class ColumnChunkPageReadStore implements PageReadStore, DictionaryPageRe
       this.valueCount = valueCount;
       this.offsetIndex = offsetIndex;
       this.rowCount = rowCount;
-
       this.blockDecryptor = blockDecryptor;
-
       this.pageReader = pageReader;
+      this.isFinished = false;
 
       if (null != blockDecryptor) {
         dataPageAAD = AesCipher.createModuleAAD(fileAAD, ModuleType.DataPage, rowGroupOrdinal, columnOrdinal, 0);
@@ -126,12 +130,13 @@ public class ColumnChunkPageReadStore implements PageReadStore, DictionaryPageRe
     }
 
     public int getPageValueCount() {
-      Preconditions.checkState(compressedPages.size() > 1,
-        "compressedPages should have at least 2 elements, but found " + compressedPages.size());
+      Preconditions.checkState(compressedPages.size() > 0,
+        "compressedPages should have at least 1 element, but found " + compressedPages.size());
       final Optional<DataPage> compressedPage;
       try {
         // Since there is no blocking peek, take the head and added it back
         compressedPage = compressedPages.take();
+        Preconditions.checkState(compressedPage.isPresent(), "Page should be non-empty!");
       } catch (InterruptedException e) {
         throw new RuntimeException("Error reading parquet page data.") ;
       }
@@ -140,22 +145,25 @@ public class ColumnChunkPageReadStore implements PageReadStore, DictionaryPageRe
     }
 
     public void skipPage() {
-      compressedPages.remove();
+      Optional<DataPage> page = compressedPages.remove();
+      Preconditions.checkState(page.isPresent(), "Page to be skipped should be non-empty!");
       pageIndex++;
     }
 
     @Override
     public DataPage readPage() {
-      final DataPage compressedPage;
-      if (compressedPages.isEmpty()) {
+      if (isFinished) {
+        // All the pages have been read. Simply return null in case this is called again.
         return null;
       }
+      final DataPage compressedPage;
       try {
         compressedPage = compressedPages.take().orElse(null);
       } catch (InterruptedException e) {
         throw new RuntimeException("Error reading parquet page data.") ;
       }
       if (compressedPage == null) {
+        isFinished = true;
         return null;
       }
       final int currentPageIndex = pageIndex++;
