@@ -130,8 +130,8 @@ public class ColumnChunkPageReadStore implements PageReadStore, DictionaryPageRe
     }
 
     public int getPageValueCount() {
-      Preconditions.checkState(compressedPages.size() > 0,
-        "compressedPages should have at least 1 element, but found " + compressedPages.size());
+      Preconditions.checkState(!isFinished,
+        "getPageValueCount shouldn't be called after all pages have been read");
       final Optional<DataPage> compressedPage;
       try {
         // Since there is no blocking peek, take the head and added it back
