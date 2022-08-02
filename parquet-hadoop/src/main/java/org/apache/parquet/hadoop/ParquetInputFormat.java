@@ -150,6 +150,12 @@ public class ParquetInputFormat<T> extends FileInputFormat<Void, T> {
   public static final String ENABLE_IO_STATS = "parquet.io.stats.enabled";
 
   /**
+   * Whether to enable off-heap buffer on the read path. If enabled, Parquet will return direct
+   * byte buffer for data pages.
+   */
+  public static final String OFF_HEAP_BUFFER_ENABLED = "parquet.read.off-heap.buffer.enabled";
+
+  /**
    * key to configure whether parquet reader should use async file reads. If set to true, the
    * parquet file reader will not block after issuing calls to get data from the file system.
    * The calling thread can then continue to issue a read for other columns in parallel. If the

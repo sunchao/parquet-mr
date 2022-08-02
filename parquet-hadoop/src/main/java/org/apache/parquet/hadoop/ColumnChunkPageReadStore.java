@@ -74,6 +74,7 @@ public class ColumnChunkPageReadStore implements PageReadStore, DictionaryPageRe
     // null means no page synchronization is required; firstRowIndex will not be returned by the pages
     private final OffsetIndex offsetIndex;
     private final long rowCount;
+    private final boolean useOffHeapBuffer;
     private int pageIndex = 0;
 
     private final BlockCipher.Decryptor blockDecryptor;
@@ -91,13 +92,15 @@ public class ColumnChunkPageReadStore implements PageReadStore, DictionaryPageRe
         LinkedBlockingDeque<Optional<DataPage>> compressedPages,
         DictionaryPage compressedDictionaryPage, OffsetIndex offsetIndex, long valueCount,
         long rowCount, BlockCipher.Decryptor blockDecryptor, byte[] fileAAD, int rowGroupOrdinal,
-        int columnOrdinal, ParquetFileReader.PageReader pageReader) {
+        int columnOrdinal, ParquetFileReader.PageReader pageReader, boolean useOffHeapBuffer) {
       this.decompressor = decompressor;
       this.compressedPages = compressedPages;
       this.compressedDictionaryPage = compressedDictionaryPage;
       this.valueCount = valueCount;
       this.offsetIndex = offsetIndex;
       this.rowCount = rowCount;
+      this.useOffHeapBuffer = useOffHeapBuffer;
+
       this.blockDecryptor = blockDecryptor;
       this.pageReader = pageReader;
       this.isFinished = false;
@@ -177,35 +180,49 @@ public class ColumnChunkPageReadStore implements PageReadStore, DictionaryPageRe
         public DataPage visit(DataPageV1 dataPageV1) {
           try {
             BytesInput bytes = dataPageV1.getBytes();
-            long compressedSize = bytes.size();
+            BytesInput decompressed;
 
-            ByteBuffer byteBuffer;
-            if (blockDecryptor == null) {
-              byteBuffer = bytes.toByteBuffer();
-            } else {
-              byte[] decrypted = blockDecryptor.decrypt(bytes.toByteArray(), dataPageAAD);
-              compressedSize = decrypted.length;
-              byteBuffer = ByteBuffer.allocateDirect((int) compressedSize);
-              byteBuffer.put(decrypted);
-              byteBuffer.flip();
+            if (useOffHeapBuffer) {
+              ByteBuffer byteBuffer;
+              long compressedSize = bytes.size();
+
+              if (blockDecryptor == null) {
+                byteBuffer = bytes.toByteBuffer();
+              } else {
+                byte[] decrypted = blockDecryptor.decrypt(bytes.toByteArray(), dataPageAAD);
+                compressedSize = decrypted.length;
+                // TODO: we should allocate this from `ByteBufferAllocator`
+                byteBuffer = ByteBuffer.allocateDirect((int) compressedSize);
+                byteBuffer.put(decrypted);
+                byteBuffer.flip();
+              }
+
+              if (!byteBuffer.isDirect()) {
+                ByteBuffer directByteBuffer = ByteBuffer.allocateDirect((int) compressedSize);;
+                directByteBuffer.put(byteBuffer);
+                directByteBuffer.flip();
+                byteBuffer = directByteBuffer;
+              }
+
+              // The input/output bytebuffers must be direct for (bytebuffer-based, native)
+              // decompressor
+              ByteBuffer decompressedBuffer =
+                ByteBuffer.allocateDirect(dataPageV1.getUncompressedSize());
+              decompressor.decompress(byteBuffer, (int) compressedSize, decompressedBuffer,
+                dataPageV1.getUncompressedSize());
+
+              // HACKY: sometimes we need to do `flip` because the position of output bytebuffer is
+              // not reset.
+              if (decompressedBuffer.position() != 0) {
+                decompressedBuffer.flip();
+              }
+              decompressed = BytesInput.from(decompressedBuffer);
+            } else { // use on-heap buffer
+              if (null != blockDecryptor) {
+                bytes = BytesInput.from(blockDecryptor.decrypt(bytes.toByteArray(), dataPageAAD));
+              }
+              decompressed = decompressor.decompress(bytes, dataPageV1.getUncompressedSize());
             }
-
-            if (!byteBuffer.isDirect()) {
-              ByteBuffer directByteBuffer = ByteBuffer.allocateDirect((int) compressedSize);;
-              directByteBuffer.put(byteBuffer);
-              directByteBuffer.flip();
-              byteBuffer = directByteBuffer;
-            }
-
-            // The input/output bytebuffers must be direct for (bytebuffer-based, native) decompressor
-            ByteBuffer decompressedBuffer = ByteBuffer.allocateDirect(dataPageV1.getUncompressedSize());
-            decompressor.decompress(byteBuffer, (int) compressedSize, decompressedBuffer, dataPageV1.getUncompressedSize());
-
-            // HACKY: sometimes we need to do `flip` because the position of output bytebuffer is not reset.
-            if (decompressedBuffer.position() != 0) {
-              decompressedBuffer.flip();
-            }
-            BytesInput decompressed = BytesInput.from(decompressedBuffer);
 
             final DataPageV1 decompressedPage;
             if (offsetIndex == null) {

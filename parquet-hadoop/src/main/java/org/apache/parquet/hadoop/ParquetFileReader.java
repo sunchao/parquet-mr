@@ -1642,7 +1642,8 @@ public class ParquetFileReader implements Closeable {
 
       return new ColumnChunkPageReader(decompressor, pagesInChunk, dictionaryPage, offsetIndex,
         this.descriptor.metadata.getValueCount(), blocks.get(currentBlock).getRowCount(),
-        pageBlockDecryptor, aadPrefix, rowGroupOrdinal, columnOrdinal, pageReader);
+        pageBlockDecryptor, aadPrefix, rowGroupOrdinal, columnOrdinal, pageReader,
+        options.useOffHeapBuffer());
     }
 
 

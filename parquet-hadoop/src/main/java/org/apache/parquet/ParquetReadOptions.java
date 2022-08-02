@@ -45,6 +45,7 @@ public class ParquetReadOptions {
   private static final boolean PAGE_VERIFY_CHECKSUM_ENABLED_DEFAULT = false;
   private static final boolean BLOOM_FILTER_ENABLED_DEFAULT = true;
   private static final boolean ENABLE_PARALLEL_IO_DEFAULT = false;
+  private static final boolean USE_OFF_HEAP_BUFFER_DEFAULT = false;
 
   private static final int IO_THREAD_POOL_SIZE_DEFAULT = 16;
   private static final boolean ENABLE_ASYNC_IO_READER_DEFAULT = false;
@@ -58,6 +59,7 @@ public class ParquetReadOptions {
   private final boolean useColumnIndexFilter;
   private final boolean usePageChecksumVerification;
   private final boolean useBloomFilter;
+  private final boolean useOffHeapBuffer;
   private final boolean enableParallelIO;
 
   private final int ioThreadPoolSize;
@@ -79,6 +81,7 @@ public class ParquetReadOptions {
                      boolean useColumnIndexFilter,
                      boolean usePageChecksumVerification,
                      boolean useBloomFilter,
+                     boolean useOffHeapBuffer,
                      boolean enableParallelIO,
                      int ioThreadPoolSize,
                      boolean enableAsyncIOReader,
@@ -98,6 +101,7 @@ public class ParquetReadOptions {
     this.useColumnIndexFilter = useColumnIndexFilter;
     this.usePageChecksumVerification = usePageChecksumVerification;
     this.useBloomFilter = useBloomFilter;
+    this.useOffHeapBuffer = useOffHeapBuffer;
     this.enableParallelIO = enableParallelIO;
     this.enableAsyncIOReader = enableAsyncIOReader;
     this.ioThreadPoolSize = ioThreadPoolSize;
@@ -134,6 +138,10 @@ public class ParquetReadOptions {
 
   public boolean useBloomFilter() {
     return useBloomFilter;
+  }
+
+  public boolean useOffHeapBuffer() {
+    return useOffHeapBuffer;
   }
 
   public boolean isParallelIOEnabled() {
@@ -209,6 +217,7 @@ public class ParquetReadOptions {
     protected boolean useColumnIndexFilter = COLUMN_INDEX_FILTERING_ENABLED_DEFAULT;
     protected boolean usePageChecksumVerification = PAGE_VERIFY_CHECKSUM_ENABLED_DEFAULT;
     protected boolean useBloomFilter = BLOOM_FILTER_ENABLED_DEFAULT;
+    protected boolean useOffHeapBuffer = USE_OFF_HEAP_BUFFER_DEFAULT;
     protected boolean enableParallelIO = ENABLE_PARALLEL_IO_DEFAULT;
     protected int ioThreadPoolSize = IO_THREAD_POOL_SIZE_DEFAULT;
     protected boolean enableAsyncIOReader = ENABLE_ASYNC_IO_READER_DEFAULT;
@@ -284,6 +293,15 @@ public class ParquetReadOptions {
 
     public Builder useBloomFilter() {
       this.useBloomFilter = true;
+      return this;
+    }
+
+    public Builder useOffHeapBuffer() {
+      return useOffHeapBuffer(true);
+    }
+
+    public Builder useOffHeapBuffer(boolean useOffHeapBuffer) {
+      this.useOffHeapBuffer = useOffHeapBuffer;
       return this;
     }
 
@@ -392,10 +410,10 @@ public class ParquetReadOptions {
     public ParquetReadOptions build() {
       return new ParquetReadOptions(
         useSignedStringMinMax, useStatsFilter, useDictionaryFilter, useRecordFilter,
-        useColumnIndexFilter, usePageChecksumVerification, useBloomFilter, enableParallelIO,
-        ioThreadPoolSize, enableAsyncIOReader, enableParallelColumnReader, enableIOStats,
-        recordFilter, metadataFilter, codecFactory, allocator, maxAllocationSize, properties,
-        fileDecryptionProperties);
+        useColumnIndexFilter, usePageChecksumVerification, useBloomFilter, useOffHeapBuffer,
+        enableParallelIO, ioThreadPoolSize, enableAsyncIOReader, enableParallelColumnReader,
+        enableIOStats, recordFilter, metadataFilter, codecFactory, allocator, maxAllocationSize,
+        properties, fileDecryptionProperties);
     }
   }
 }
