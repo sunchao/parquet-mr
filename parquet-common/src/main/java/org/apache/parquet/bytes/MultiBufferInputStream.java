@@ -31,6 +31,7 @@ import java.util.NoSuchElementException;
 class MultiBufferInputStream extends ByteBufferInputStream {
   private static final ByteBuffer EMPTY = ByteBuffer.allocate(0);
 
+  private final ByteBufferAllocator allocator;
   protected final List<ByteBuffer> buffers;
   private final long length;
 
@@ -51,7 +52,15 @@ class MultiBufferInputStream extends ByteBufferInputStream {
       '}';
   }
 
-  MultiBufferInputStream(List<ByteBuffer> buffers) {
+  /**
+   * Creates an input stream from the list of buffers provided. If 'allocator' is not null, this
+   * will take the ownership of the buffers, and release them when this input stream is closed.
+   *
+   * @param allocator the allocator
+   * @param buffers
+   */
+  MultiBufferInputStream(ByteBufferAllocator allocator, List<ByteBuffer> buffers) {
+    this.allocator = allocator;
     this.buffers = buffers;
 
     long totalLen = 0;
@@ -63,6 +72,15 @@ class MultiBufferInputStream extends ByteBufferInputStream {
     this.iterator = buffers.iterator();
 
     nextBuffer();
+  }
+
+  MultiBufferInputStream(List<ByteBuffer> buffers) {
+    this(null, buffers);
+  }
+
+  @Override
+  public ByteBufferAllocator allocator() {
+    return this.allocator;
   }
 
   /**

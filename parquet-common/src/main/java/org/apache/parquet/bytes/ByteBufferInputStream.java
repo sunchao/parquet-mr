@@ -30,80 +30,63 @@ import java.util.concurrent.ExecutorService;
 import org.apache.parquet.ShouldNeverHappenException;
 import org.apache.parquet.io.SeekableInputStream;
 
-public class ByteBufferInputStream extends InputStream {
+public abstract class ByteBufferInputStream extends InputStream {
 
-  // Used to maintain the deprecated behavior of instantiating ByteBufferInputStream directly
-  private final ByteBufferInputStream delegate;
-
-  public static ByteBufferInputStream wrap(ByteBuffer... buffers) {
+  /**
+   * Wraps a list of 'buffers' into an input stream. All the buffers should be allocated by the
+   * input 'allocator'. Once the returned input stream is closed, the 'allocator' will be used to
+   * close all the buffers.
+   *
+   * @param allocator the original allocator that created all the buffers, will be used to
+   *                  de-allocate them once the returned input stream is closed
+   * @param buffers byte buffers that constitute the input stream
+   * @return an input stream wrapping all the buffers
+   */
+  public static ByteBufferInputStream wrap(ByteBufferAllocator allocator, ByteBuffer... buffers) {
     if (buffers.length == 1) {
-      return new SingleBufferInputStream(buffers[0]);
+      return new SingleBufferInputStream(allocator, buffers[0]);
     } else {
       return new MultiBufferInputStream(Arrays.asList(buffers));
     }
   }
 
-  public static ByteBufferInputStream wrap(List<ByteBuffer> buffers) {
+  /**
+   * Wraps a list of 'buffers' into an input stream.
+   *
+   * @param buffers byte buffers that constitute the input stream
+   * @return an input stream wrapping all the buffers
+   */
+  public static ByteBufferInputStream wrap(ByteBuffer... buffers) {
+    return wrap(null, buffers);
+  }
+
+  /**
+   * @see #wrap(ByteBufferAllocator, ByteBuffer...)
+   */
+  public static ByteBufferInputStream wrap(ByteBufferAllocator allocator,
+      List<ByteBuffer> buffers) {
     if (buffers.size() == 1) {
-      return new SingleBufferInputStream(buffers.get(0));
+      return new SingleBufferInputStream(allocator, buffers.get(0));
     } else {
       return new MultiBufferInputStream(buffers);
     }
   }
 
-  public static ByteBufferInputStream wrapAsync(ExecutorService threadPool, SeekableInputStream fileInputStream,
-    List<ByteBuffer> buffers) {
+  /**
+   * @see #wrap(ByteBuffer...)
+   */
+  public static ByteBufferInputStream wrap(List<ByteBuffer> buffers) {
+    return wrap(null, buffers);
+  }
+
+  public static ByteBufferInputStream wrapAsync(ExecutorService threadPool,
+      SeekableInputStream fileInputStream, List<ByteBuffer> buffers) {
     return new AsyncMultiBufferInputStream(threadPool, fileInputStream, buffers);
   }
 
-  ByteBufferInputStream() {
-    delegate = null;
-  }
+  public abstract ByteBufferAllocator allocator();
 
-  /**
-   * @param buffer
-   *          the buffer to be wrapped in this input stream
-   * @deprecated Will be removed in 2.0.0; Use {@link #wrap(ByteBuffer...)} instead
-   */
-  @Deprecated
-  public ByteBufferInputStream(ByteBuffer buffer) {
-    delegate = wrap(buffer);
-  }
-
-  /**
-   * @param buffer
-   *          the buffer to be wrapped in this input stream
-   * @param offset
-   *          the offset of the data in the buffer
-   * @param count
-   *          the number of bytes to be read from the buffer
-   * @deprecated Will be removed in 2.0.0; Use {@link #wrap(ByteBuffer...)} instead
-   */
-  @Deprecated
-  public ByteBufferInputStream(ByteBuffer buffer, int offset, int count) {
-    ByteBuffer temp = buffer.duplicate();
-    temp.position(offset);
-    ByteBuffer byteBuf = temp.slice();
-    byteBuf.limit(count);
-    delegate = wrap(byteBuf);
-  }
-
-  /**
-   * @return the slice of the byte buffer inside this stream
-   * @deprecated Will be removed in 2.0.0; Use {@link #slice(int)} instead
-   */
-  @Deprecated
-  public ByteBuffer toByteBuffer() {
-    try {
-      return slice(available());
-    } catch (EOFException e) {
-      throw new ShouldNeverHappenException(e);
-    }
-  }
-
-  public long position() {
-    return delegate.position();
-  }
+  public abstract long position();
 
   public void skipFully(long n) throws IOException {
     long skipped = skip(n);
@@ -113,55 +96,33 @@ public class ByteBufferInputStream extends InputStream {
     }
   }
 
-  public int read(ByteBuffer out) {
-    return delegate.read(out);
-  }
+  public abstract int read(ByteBuffer out);
 
-  public ByteBuffer slice(int length) throws EOFException {
-    return delegate.slice(length);
-  }
+  public abstract ByteBuffer slice(int length) throws EOFException;
 
-  public List<ByteBuffer> sliceBuffers(long length) throws EOFException {
-    return delegate.sliceBuffers(length);
-  }
+  public abstract List<ByteBuffer> sliceBuffers(long length) throws EOFException;
 
   public ByteBufferInputStream sliceStream(long length) throws EOFException {
-    return ByteBufferInputStream.wrap(sliceBuffers(length));
+    return ByteBufferInputStream.wrap(allocator(), sliceBuffers(length));
   }
 
-  public List<ByteBuffer> remainingBuffers() {
-    return delegate.remainingBuffers();
-  }
+  public abstract List<ByteBuffer> remainingBuffers();
 
   public ByteBufferInputStream remainingStream() {
     return ByteBufferInputStream.wrap(remainingBuffers());
   }
 
-  public int read() throws IOException {
-    return delegate.read();
-  }
+  public abstract int read() throws IOException;
 
-  public int read(byte[] b, int off, int len) throws IOException {
-    return delegate.read(b, off, len);
-  }
+  public abstract int read(byte[] b, int off, int len) throws IOException;
 
-  public long skip(long n) {
-    return delegate.skip(n);
-  }
+  public abstract long skip(long n);
 
-  public int available() {
-    return delegate.available();
-  }
+  public abstract int available();
 
-  public void mark(int readlimit) {
-    delegate.mark(readlimit);
-  }
+  public abstract void mark(int readlimit);
 
-  public void reset() throws IOException {
-    delegate.reset();
-  }
+  public abstract void reset() throws IOException;
 
-  public boolean markSupported() {
-    return delegate.markSupported();
-  }
+  public abstract boolean markSupported();
 }

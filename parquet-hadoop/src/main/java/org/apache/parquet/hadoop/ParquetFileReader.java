@@ -64,6 +64,7 @@ import org.apache.hadoop.fs.statistics.IOStatisticsLogging;
 import org.apache.hadoop.fs.statistics.IOStatisticsSource;
 import org.apache.parquet.HadoopReadOptions;
 import org.apache.parquet.ParquetReadOptions;
+import org.apache.parquet.bytes.ByteBufferAllocator;
 import org.apache.parquet.bytes.ByteBufferInputStream;
 import org.apache.parquet.bytes.BytesInput;
 import org.apache.parquet.bytes.SequenceByteBufferInputStream;
@@ -1038,7 +1039,7 @@ public class ParquetFileReader implements Closeable {
       }
     }
     // actually read all the chunks
-    ChunkListBuilder builder = new ChunkListBuilder();
+    ChunkListBuilder builder = new ChunkListBuilder(options.getAllocator());
     for (ConsecutivePartList consecutiveChunks : allParts) {
       if (isAsyncIOReaderEnabled()) {
         SeekableInputStream is = file.newStream(consecutiveChunks.offset, consecutiveChunks.length);
@@ -1126,7 +1127,7 @@ public class ParquetFileReader implements Closeable {
     }
     this.currentRowGroup = new ColumnChunkPageReadStore(rowRanges);
     // prepare the list of consecutive parts to read them in one scan
-    ChunkListBuilder builder = new ChunkListBuilder();
+    ChunkListBuilder builder = new ChunkListBuilder(options.getAllocator());
     List<ConsecutivePartList> allParts = new ArrayList<ConsecutivePartList>();
     ConsecutivePartList currentParts = null;
     for (ColumnChunkMetaData mc : block.getColumns()) {
@@ -1501,9 +1502,14 @@ public class ParquetFileReader implements Closeable {
       OffsetIndex offsetIndex;
     }
 
+    private final ByteBufferAllocator allocator;
     private final Map<ChunkDescriptor, ChunkData> map = new HashMap<>();
     private ChunkDescriptor lastDescriptor;
     private SeekableInputStream f;
+
+    ChunkListBuilder(ByteBufferAllocator allocator) {
+      this.allocator = allocator;
+    }
 
     void add(ChunkDescriptor descriptor, ByteBufferInputStream stream, SeekableInputStream f) {
       ChunkData data = map.get(descriptor);
@@ -1547,17 +1553,19 @@ public class ParquetFileReader implements Closeable {
             // because of a bug, the last chunk might be larger than descriptor.size
             chunks.add(
               new WorkaroundChunk(lastDescriptor, new SequenceByteBufferInputStream(data.streams),
-                f, data.offsetIndex));
+                f, data.offsetIndex, allocator));
           } else {
             chunks.add(new Chunk(descriptor, new SequenceByteBufferInputStream(data.streams),
-              data.offsetIndex));
+              data.offsetIndex, allocator));
           }
         } else {
           if (descriptor.equals(lastDescriptor)) {
             // because of a bug, the last chunk might be larger than descriptor.size
-            chunks.add(new WorkaroundChunk(lastDescriptor, ByteBufferInputStream.wrap(data.buffers), f, data.offsetIndex));
+            chunks.add(new WorkaroundChunk(lastDescriptor,
+              ByteBufferInputStream.wrap(data.buffers), f, data.offsetIndex, allocator));
           } else {
-            chunks.add(new Chunk(descriptor, ByteBufferInputStream.wrap(data.buffers), data.offsetIndex));
+            chunks.add(new Chunk(descriptor, ByteBufferInputStream.wrap(data.buffers),
+              data.offsetIndex, allocator));
           }
         }
       }
@@ -1575,14 +1583,23 @@ public class ParquetFileReader implements Closeable {
     final OffsetIndex offsetIndex;
 
     /**
+     * Allocator for all the buffers in 'stream'. Used to release the buffers when the 'stream'
+     * is no longer in use.
+     */
+    final ByteBufferAllocator allocator;
+
+    /**
      * @param descriptor descriptor for the chunk
      * @param stream the input stream to read from
      * @param offsetIndex the offset index for this column; might be null
+     * @param allocator the buffer allocator for all the buffers in the 'stream'
      */
-    public Chunk(ChunkDescriptor descriptor, ByteBufferInputStream stream, OffsetIndex offsetIndex) {
+    public Chunk(ChunkDescriptor descriptor, ByteBufferInputStream stream,
+        OffsetIndex offsetIndex, ByteBufferAllocator allocator) {
       this.descriptor = descriptor;
       this.stream = stream;
       this.offsetIndex = offsetIndex;
+      this.allocator = allocator;
     }
 
     protected PageHeader readPageHeader() throws IOException {
@@ -1657,15 +1674,18 @@ public class ParquetFileReader implements Closeable {
       return offsetIndex.getPageOrdinal(dataPageCountReadSoFar);
     }
 
-
     /**
      * @param size the size of the page
      * @return the page
      * @throws IOException if there is an error while reading from the file stream
      */
-    public BytesInput readAsBytesInput(int size) throws IOException {
+    BytesInput readAsBytesInput(int size) throws IOException {
       String mode = (isAsyncIOReaderEnabled())? "ASYNC":"SYNC";
       LOG.debug("{} READ BYTES INPUT: stream {}", mode, stream);
+      List<ByteBuffer> buffers = stream.sliceBuffers(size);
+      // release these to make them weak references, since we don't want to track the reference
+      // count in pages handed over to the client side.
+      for (ByteBuffer buffer : buffers) allocator.release(buffer);
       return BytesInput.from(stream.sliceBuffers(size));
     }
 
@@ -1690,8 +1710,9 @@ public class ParquetFileReader implements Closeable {
      * @param descriptor the descriptor of the chunk
      * @param f the file stream positioned at the end of this chunk
      */
-    private WorkaroundChunk(ChunkDescriptor descriptor, ByteBufferInputStream stream, SeekableInputStream f, OffsetIndex offsetIndex) {
-      super(descriptor, stream, offsetIndex);
+    private WorkaroundChunk(ChunkDescriptor descriptor, ByteBufferInputStream stream,
+        SeekableInputStream f, OffsetIndex offsetIndex, ByteBufferAllocator allocator) {
+      super(descriptor, stream, offsetIndex, allocator);
       this.f = f;
     }
 
@@ -1713,7 +1734,7 @@ public class ParquetFileReader implements Closeable {
       return pageHeader;
     }
 
-    public BytesInput readAsBytesInput(int size) throws IOException {
+    BytesInput readAsBytesInput(int size) throws IOException {
       int available = stream.available();
       if (size > available) {
         // this is to workaround a bug where the compressedLength
@@ -1723,8 +1744,10 @@ public class ParquetFileReader implements Closeable {
         int missingBytes = size - available;
         LOG.info("completed the column chunk with {} bytes", missingBytes);
 
-        List<ByteBuffer> buffers = new ArrayList<>();
-        buffers.addAll(stream.sliceBuffers(available));
+        List<ByteBuffer> buffers = stream.sliceBuffers(available);
+        // release these to make them weak references, since we don't want to track the reference
+        // count in pages handed over to the client side.
+        for (ByteBuffer buffer : buffers) allocator.release(buffer);
 
         // do we make this async? If the async reader has completed reading its last
         // buffer, the file stream will be positioned at the right place and this will work just
@@ -1825,7 +1848,7 @@ public class ParquetFileReader implements Closeable {
       length += descriptor.size;
     }
 
-    private List<ByteBuffer> allocateReadBuffers() {
+    private List<ByteBuffer> allocateReadBuffers(ByteBufferAllocator allocator) {
       int fullAllocations = Math.toIntExact(length / options.getMaxAllocationSize());
       int lastAllocationSize = Math.toIntExact(length % options.getMaxAllocationSize());
 
@@ -1833,11 +1856,11 @@ public class ParquetFileReader implements Closeable {
       List<ByteBuffer> buffers = new ArrayList<>(numAllocations);
 
       for (int i = 0; i < fullAllocations; i += 1) {
-        buffers.add(options.getAllocator().allocate(options.getMaxAllocationSize()));
+        buffers.add(allocator.allocate(options.getMaxAllocationSize()));
       }
 
       if (lastAllocationSize > 0) {
-        buffers.add(options.getAllocator().allocate(lastAllocationSize));
+        buffers.add(allocator.allocate(lastAllocationSize));
       }
       return buffers;
 
@@ -1855,7 +1878,7 @@ public class ParquetFileReader implements Closeable {
       // same input stream shared between threads.
       is.seek(offset);
 
-      List<ByteBuffer> buffers = allocateReadBuffers();
+      List<ByteBuffer> buffers = allocateReadBuffers(builder.allocator);
 
       ByteBufferInputStream stream;
       if (!isAsyncIOReaderEnabled()) {
@@ -1894,7 +1917,7 @@ public class ParquetFileReader implements Closeable {
     public void readAllParallel(SeekableInputStream is, ChunkListBuilder builder)
       throws IOException {
 
-      List<ByteBuffer> buffers = allocateReadBuffers();
+      List<ByteBuffer> buffers = allocateReadBuffers(builder.allocator);
 
       int nThreads = options.getIOThreadPoolSize();
       ExecutorService threadPool = Executors.newFixedThreadPool(nThreads);
@@ -2007,6 +2030,10 @@ public class ParquetFileReader implements Closeable {
         ChunkDescriptor descriptor = chunks.get(i);
         builder.add(descriptor, stream.sliceBuffers(descriptor.size), is);
       }
+      // Release all the buffers since we now have transferred their references to the builder
+      for (ByteBuffer buffer : buffers) {
+        builder.allocator.release(buffer);
+      }
     }
 
     /**
@@ -2094,7 +2121,6 @@ public class ParquetFileReader implements Closeable {
       }
     }
 
-
     public DictionaryPage getDictionaryPage(){
       return this.dictionaryPage;
     }
@@ -2108,7 +2134,7 @@ public class ParquetFileReader implements Closeable {
     }
 
     void readAllRemainingPages() throws IOException {
-      while(hasMorePages(valuesCountReadSoFar, dataPageCountReadSoFar)) {
+      while (hasMorePages(valuesCountReadSoFar, dataPageCountReadSoFar)) {
         readOnePage();
       }
       if (chunk.offsetIndex == null && valuesCountReadSoFar != chunk.descriptor.metadata.getValueCount()) {
@@ -2268,11 +2294,11 @@ public class ParquetFileReader implements Closeable {
     @Override
     public void close() throws IOException {
       Future<Void> readResult;
-      while(!readFutures.isEmpty()) {
+      while (!readFutures.isEmpty()) {
         try {
           readResult = readFutures.poll();
           readResult.get();
-          if(!readResult.isDone() && !readResult.isCancelled()){
+          if (!readResult.isDone() && !readResult.isCancelled()){
             readResult.cancel(true);
           } else {
             readResult.get(1, TimeUnit.MILLISECONDS);
@@ -2281,6 +2307,7 @@ public class ParquetFileReader implements Closeable {
           // Do nothing
         }
       }
+
       String mode = isAsyncIOReaderEnabled() ? "ASYNC" : "SYNC";
       LOG.debug("READ PAGE: {}, {}, {}, {}, {}, {}, {}", mode,
         totalTimeReadOnePage.longValue() / 1000.0, totalCountReadOnePage.longValue(),

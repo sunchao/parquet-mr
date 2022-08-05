@@ -25,18 +25,32 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * This ByteBufferInputStream does not consume the ByteBuffer being passed in, 
+ * This ByteBufferInputStream does not consume the ByteBuffer being passed in,
  * but will create a slice of the current buffer.
  */
 class SingleBufferInputStream extends ByteBufferInputStream {
 
+  private final ByteBufferAllocator allocator;
   private final ByteBuffer buffer;
   private final long startPosition;
   private int mark = -1;
 
   SingleBufferInputStream(ByteBuffer buffer) {
+    this(null, buffer);
+  }
+
+  /**
+   * Creates an input stream on top of the provided 'buffer'. If 'allocator' is not null, this
+   * will take the full ownership, and ensure the 'buffer' is released when the stream is closed.
+   *
+   * @param allocator the allocator used to allocate the 'buffer'
+   * @param buffer the byte buffer for this input stream
+   */
+  SingleBufferInputStream(ByteBufferAllocator allocator, ByteBuffer buffer) {
+    this.allocator = allocator;
     // duplicate the buffer because its state will be modified
     this.buffer = buffer.duplicate();
+    if (allocator != null) allocator.release(buffer);
     this.startPosition = buffer.position();
   }
 
@@ -44,6 +58,11 @@ class SingleBufferInputStream extends ByteBufferInputStream {
   public long position() {
     // position is relative to the start of the stream, not the buffer
     return buffer.position() - startPosition;
+  }
+
+  @Override
+  public ByteBufferAllocator allocator() {
+    return this.allocator;
   }
 
   @Override
@@ -70,7 +89,7 @@ class SingleBufferInputStream extends ByteBufferInputStream {
 
     return bytesToRead;
   }
-  
+
   @Override
   public long skip(long n) {
     if (n == 0) {
@@ -162,6 +181,13 @@ class SingleBufferInputStream extends ByteBufferInputStream {
       this.mark = -1;
     } else {
       throw new IOException("No mark defined");
+    }
+  }
+
+  @Override
+  public void close() throws IOException {
+    if (allocator != null) {
+      allocator.release(buffer);
     }
   }
 

@@ -555,16 +555,6 @@ public abstract class TestByteBufferInputStreams {
         });
   }
 
-  @Test
-  public void testToByteBuffer() {
-    final ByteBufferInputStream stream = newStream();
-
-    ByteBuffer buffer = stream.toByteBuffer();
-    for (int i = 0; i < DATA_LENGTH; ++i) {
-      assertEquals(i, buffer.get());
-    }
-  }
-
   /**
    * A convenience method to avoid a large number of @Test(expected=...) tests
    * @param message A String message to describe this assertion

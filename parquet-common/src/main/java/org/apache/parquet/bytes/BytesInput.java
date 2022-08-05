@@ -19,6 +19,7 @@
 package org.apache.parquet.bytes;
 
 import java.io.ByteArrayOutputStream;
+import java.io.Closeable;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -41,7 +42,7 @@ import org.slf4j.LoggerFactory;
  * subsequent BytesInput reads from the stream will be incorrect
  * if the previous has not been consumed.
  */
-abstract public class BytesInput {
+abstract public class BytesInput implements Closeable {
   private static final Logger LOG = LoggerFactory.getLogger(BytesInput.class);
   private static final EmptyBytesInput EMPTY_BYTES_INPUT = new EmptyBytesInput();
 
@@ -72,20 +73,8 @@ abstract public class BytesInput {
     return new StreamBytesInput(in, bytes);
   }
 
-  /**
-   * @param buffer
-   * @param length
-   *          number of bytes to read
-   * @return a BytesInput that will read the given bytes from the ByteBuffer
-   * @deprecated Will be removed in 2.0.0
-   */
-  @Deprecated
-  public static BytesInput from(ByteBuffer buffer, int offset, int length) {
-    ByteBuffer tmp = buffer.duplicate();
-    tmp.position(offset);
-    ByteBuffer slice = tmp.slice();
-    slice.limit(length);
-    return new ByteBufferBytesInput(slice);
+  public static BytesInput from(ByteBufferAllocator allocator, ByteBuffer... buffers) {
+
   }
 
   /**
@@ -244,6 +233,10 @@ abstract public class BytesInput {
    */
   public ByteBufferInputStream toInputStream() throws IOException {
     return ByteBufferInputStream.wrap(toByteBuffer());
+  }
+
+  public void close() throws IOException {
+    // By default, this is a no-op. Sub-classes should override this instead.
   }
 
   /**
@@ -516,9 +509,15 @@ abstract public class BytesInput {
   }
 
   public static class ByteBufferBytesInput extends BytesInput {
+    /**
+     * Optional allocator. If not null, represents the original allocator that created 'buffer'
+     * and will be used to release it once 'close' method of this is called.
+     */
+    private final ByteBufferAllocator allocator;
     private final ByteBuffer buffer;
 
-    private ByteBufferBytesInput(ByteBuffer buffer) {
+    private ByteBufferBytesInput(ByteBufferAllocator allocator, ByteBuffer buffer) {
+      this.allocator = allocator;
       this.buffer = buffer;
     }
 
@@ -541,6 +540,13 @@ abstract public class BytesInput {
     public ByteBuffer toByteBuffer() throws IOException {
       // `BytesInput.toByteBuffer` copies data into additional byte array.
       return buffer.slice();
+    }
+
+    @Override
+    public void close() throws IOException {
+      if (allocator != null) {
+        allocator.release(buffer);
+      }
     }
   }
 }

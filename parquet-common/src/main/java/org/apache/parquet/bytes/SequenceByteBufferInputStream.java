@@ -76,6 +76,12 @@ public class SequenceByteBufferInputStream extends ByteBufferInputStream {
   }
 
   @Override
+  public ByteBufferAllocator allocator() {
+    // SequenceByteBufferInputStream doesn't carry its own byte buffer allocator
+    return null;
+  }
+
+  @Override
   public int read(ByteBuffer out) {
     int len = out.remaining();
     if (len <= 0) {
