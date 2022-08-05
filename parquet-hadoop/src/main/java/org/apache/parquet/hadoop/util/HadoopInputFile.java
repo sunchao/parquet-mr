@@ -35,7 +35,7 @@ import java.util.regex.Pattern;
 
 public class HadoopInputFile implements InputFile {
   private static final String MAJOR_MINOR_REGEX = "^(\\d+)\\.(\\d+)(\\..*)?$";
-  private static final Pattern HADOOP3_MATCHER = Pattern.compile(MAJOR_MINOR_REGEX);
+  private static final Pattern VERSION_MATCHER = Pattern.compile(MAJOR_MINOR_REGEX);
 
   private final FileSystem fs;
   private final FileStatus stat;
@@ -53,16 +53,19 @@ public class HadoopInputFile implements InputFile {
     return new HadoopInputFile(fs, stat, conf);
   }
 
-  public static boolean isHadoop3() {
+  public static boolean isAtLeastHadoop33() {
     String version = VersionInfo.getVersion();
-    return isHadoop3(version);
+    return HadoopInputFile.isAtLeastHadoop33(version);
   }
 
   @VisibleForTesting
-  static boolean isHadoop3(String version) {
-    Matcher matcher = HADOOP3_MATCHER.matcher(version);
+  static boolean isAtLeastHadoop33(String version) {
+    Matcher matcher = VERSION_MATCHER.matcher(version);
     if (matcher.matches()) {
-      return matcher.group(1).equals("3");
+      if (matcher.group(1).equals("3")) {
+        int minorVersion = Integer.parseInt(matcher.group(2));
+        return minorVersion >= 3;
+      }
     }
     return false;
   }
@@ -94,7 +97,7 @@ public class HadoopInputFile implements InputFile {
   public SeekableInputStream newStream() throws IOException {
     FSDataInputStream stream;
     try {
-      if (isHadoop3()) {
+      if (isAtLeastHadoop33()) {
         stream = fs.openFile(stat.getPath())
           .withFileStatus(stat)
           .build()
@@ -119,7 +122,7 @@ public class HadoopInputFile implements InputFile {
   public SeekableInputStream newStream(long offset, long length) throws IOException {
     try {
       FSDataInputStream stream;
-      if (isHadoop3()) {
+      if (isAtLeastHadoop33()) {
         FutureDataInputStreamBuilder inputStreamBuilder = fs
           .openFile(stat.getPath())
           .withFileStatus(stat);
