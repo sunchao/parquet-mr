@@ -24,7 +24,7 @@
     <groupId>org.apache.parquet</groupId>
     <artifactId>parquet</artifactId>
     <relativePath>../pom.xml</relativePath>
-    <version>1.12.0.13-dev-apple-SNAPSHOT</version>
+    <version>1.12.0.14-dev-apple-SNAPSHOT</version>
   </parent>
 
   <artifactId>parquet-format-structures</artifactId>
