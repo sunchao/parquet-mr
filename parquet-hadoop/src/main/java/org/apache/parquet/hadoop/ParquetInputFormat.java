@@ -170,6 +170,12 @@ public class ParquetInputFormat<T> extends FileInputFormat<Void, T> {
    * async IO this option still allows multiple columns to be decompressed and decoded in parallel.
    */
   public static final String ENABLE_PARALLEL_COLUMN_READER = "parquet.read.parallel.columnreader.enabled";
+
+  /**
+   * Whether Parquet reader should return compressed dictionary page and data pages to the client.
+   */
+  public static final String ENABLE_COMPRESSED_PAGES = "parquet.read.compressed-pages.enabled";
+
   /**
    * key to turn on or off task side metadata loading (default true)
    * if true then metadata is read on the task side and some tasks may finish immediately.

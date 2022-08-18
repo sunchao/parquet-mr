@@ -1,4 +1,4 @@
-/* 
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -34,6 +34,8 @@ public class DataPageV1 extends DataPage {
   private final int indexRowCount;
 
   /**
+   * Creates a compressed data page
+   *
    * @param bytes the bytes for this page
    * @param valueCount count of values in this page
    * @param uncompressedSize the uncompressed size of the page
@@ -42,8 +44,28 @@ public class DataPageV1 extends DataPage {
    * @param dlEncoding the definition level encoding for this page
    * @param valuesEncoding the values encoding for this page
    */
-  public DataPageV1(BytesInput bytes, int valueCount, int uncompressedSize, Statistics<?> statistics, Encoding rlEncoding, Encoding dlEncoding, Encoding valuesEncoding) {
-    super(Math.toIntExact(bytes.size()), uncompressedSize, valueCount);
+  public DataPageV1(BytesInput bytes, int valueCount, int uncompressedSize,
+      Statistics<?> statistics, Encoding rlEncoding, Encoding dlEncoding, Encoding valuesEncoding) {
+    this(bytes, valueCount, uncompressedSize, statistics, rlEncoding, dlEncoding, valuesEncoding,
+      true);
+  }
+
+  /**
+   * Creates a data page
+   *
+   * @param bytes the bytes for this page
+   * @param valueCount count of values in this page
+   * @param uncompressedSize the uncompressed size of the page
+   * @param statistics of the page's values (max, min, num_null)
+   * @param rlEncoding the repetition level encoding for this page
+   * @param dlEncoding the definition level encoding for this page
+   * @param valuesEncoding the values encoding for this page
+   * @param isCompressed whether the data page is compressed or not
+   */
+  public DataPageV1(BytesInput bytes, int valueCount, int uncompressedSize,
+      Statistics<?> statistics, Encoding rlEncoding, Encoding dlEncoding, Encoding valuesEncoding,
+      boolean isCompressed) {
+    super(Math.toIntExact(bytes.size()), uncompressedSize, valueCount, isCompressed);
     this.bytes = bytes;
     this.statistics = statistics;
     this.rlEncoding = rlEncoding;
@@ -52,7 +74,8 @@ public class DataPageV1 extends DataPage {
     this.indexRowCount = -1;
   }
 
-  /**
+  /** Creates a compressed data page.
+   *
    * @param bytes the bytes for this page
    * @param valueCount count of values in this page
    * @param uncompressedSize the uncompressed size of the page
@@ -63,9 +86,17 @@ public class DataPageV1 extends DataPage {
    * @param dlEncoding the definition level encoding for this page
    * @param valuesEncoding the values encoding for this page
    */
-  public DataPageV1(BytesInput bytes, int valueCount, int uncompressedSize, long firstRowIndex, int rowCount,
-      Statistics<?> statistics, Encoding rlEncoding, Encoding dlEncoding, Encoding valuesEncoding) {
-    super(Math.toIntExact(bytes.size()), uncompressedSize, valueCount, firstRowIndex);
+  public DataPageV1(BytesInput bytes, int valueCount, int uncompressedSize, long firstRowIndex,
+      int rowCount, Statistics<?> statistics, Encoding rlEncoding, Encoding dlEncoding,
+      Encoding valuesEncoding) {
+    this(bytes, valueCount, uncompressedSize, firstRowIndex, rowCount, statistics, rlEncoding,
+      dlEncoding, valuesEncoding, true);
+  }
+
+  public DataPageV1(BytesInput bytes, int valueCount, int uncompressedSize, long firstRowIndex,
+      int rowCount, Statistics<?> statistics, Encoding rlEncoding, Encoding dlEncoding,
+      Encoding valuesEncoding, boolean isCompressed) {
+    super(Math.toIntExact(bytes.size()), uncompressedSize, valueCount, firstRowIndex, isCompressed);
     this.bytes = bytes;
     this.statistics = statistics;
     this.rlEncoding = rlEncoding;

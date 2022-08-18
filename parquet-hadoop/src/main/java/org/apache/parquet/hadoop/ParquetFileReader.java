@@ -1310,12 +1310,15 @@ public class ParquetFileReader implements Closeable {
     }
 
     DictionaryPage compressedPage = readCompressedDictionary(pageHeader, inputStream, pageDecryptor, dictionaryPageAAD);
-    BytesInputDecompressor decompressor = options.getCodecFactory().getDecompressor(meta.getCodec());
-
-    return new DictionaryPage(
+    if (options.isCompressedPagesEnabled()) {
+      return compressedPage;
+    } else {
+      BytesInputDecompressor decompressor = options.getCodecFactory().getDecompressor(meta.getCodec());
+      return new DictionaryPage(
         decompressor.decompress(compressedPage.getBytes(), compressedPage.getUncompressedSize()),
         compressedPage.getDictionarySize(),
         compressedPage.getEncoding());
+    }
   }
 
   private DictionaryPage readCompressedDictionary(
@@ -1337,7 +1340,7 @@ public class ParquetFileReader implements Closeable {
 
     return new DictionaryPage(
         bin, uncompressedPageSize, dictHeader.getNum_values(),
-        converter.getEncoding(dictHeader.getEncoding()));
+        converter.getEncoding(dictHeader.getEncoding()), true);
   }
 
   public BloomFilterReader getBloomFilterDataReader(BlockMetaData block) {
@@ -1642,8 +1645,7 @@ public class ParquetFileReader implements Closeable {
 
       return new ColumnChunkPageReader(decompressor, pagesInChunk, dictionaryPage, offsetIndex,
         this.descriptor.metadata.getValueCount(), blocks.get(currentBlock).getRowCount(),
-        pageBlockDecryptor, aadPrefix, rowGroupOrdinal, columnOrdinal, pageReader,
-        options.useOffHeapBuffer());
+        pageBlockDecryptor, aadPrefix, rowGroupOrdinal, columnOrdinal, pageReader, options);
     }
 
 

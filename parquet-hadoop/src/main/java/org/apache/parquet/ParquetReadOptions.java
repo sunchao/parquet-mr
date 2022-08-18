@@ -51,6 +51,7 @@ public class ParquetReadOptions {
   private static final boolean ENABLE_ASYNC_IO_READER_DEFAULT = false;
   private static final boolean ENABLE_PARALLEL_COLUMN_READER_DEFAULT = false;
   private static final boolean ENABLE_IO_STATS_DEFAULT = false;
+  private static final boolean ENABLE_COMPRESSED_PAGES_DEFAULT = false;
 
   private final boolean useSignedStringMinMax;
   private final boolean useStatsFilter;
@@ -66,6 +67,7 @@ public class ParquetReadOptions {
   private final boolean enableAsyncIOReader;
   private final boolean enableParallelColumnReader;
   private final boolean enableIOStats;
+  private final boolean enableCompressedPages;
   private final FilterCompat.Filter recordFilter;
   private final ParquetMetadataConverter.MetadataFilter metadataFilter;
   private final CompressionCodecFactory codecFactory;
@@ -87,6 +89,7 @@ public class ParquetReadOptions {
                      boolean enableAsyncIOReader,
                      boolean enableParallelColumnReader,
                      boolean enableIOStats,
+                     boolean enableCompressedPages,
                      FilterCompat.Filter recordFilter,
                      ParquetMetadataConverter.MetadataFilter metadataFilter,
                      CompressionCodecFactory codecFactory,
@@ -107,6 +110,7 @@ public class ParquetReadOptions {
     this.ioThreadPoolSize = ioThreadPoolSize;
     this.enableParallelColumnReader = enableParallelColumnReader;
     this.enableIOStats = enableIOStats;
+    this.enableCompressedPages = enableCompressedPages;
     this.recordFilter = recordFilter;
     this.metadataFilter = metadataFilter;
     this.codecFactory = codecFactory;
@@ -161,6 +165,10 @@ public class ParquetReadOptions {
 
   public boolean isIOStatsEnabled() {
     return enableIOStats;
+  }
+
+  public boolean isCompressedPagesEnabled() {
+    return enableCompressedPages;
   }
 
   public boolean usePageChecksumVerification() {
@@ -223,6 +231,7 @@ public class ParquetReadOptions {
     protected boolean enableAsyncIOReader = ENABLE_ASYNC_IO_READER_DEFAULT;
     protected boolean enableParallelColumnReader = ENABLE_PARALLEL_COLUMN_READER_DEFAULT;
     protected boolean enableIOStats = ENABLE_IO_STATS_DEFAULT;
+    protected boolean enableCompressedPages = ENABLE_COMPRESSED_PAGES_DEFAULT;
     protected FilterCompat.Filter recordFilter = null;
     protected ParquetMetadataConverter.MetadataFilter metadataFilter = NO_FILTER;
     // the page size parameter isn't used when only using the codec factory to get decompressors
@@ -335,6 +344,11 @@ public class ParquetReadOptions {
       return this;
     }
 
+    public Builder enableCompressedPages(boolean enableCompressedPages) {
+      this.enableCompressedPages = enableCompressedPages;
+      return this;
+    }
+
     public Builder withRecordFilter(FilterCompat.Filter rowGroupFilter) {
       this.recordFilter = rowGroupFilter;
       return this;
@@ -397,6 +411,7 @@ public class ParquetReadOptions {
       enableAsyncIOReader(options.enableAsyncIOReader);
       enableParallelColumnReader(options.enableParallelColumnReader);
       enableIOStats(options.enableIOStats);
+      enableCompressedPages(options.enableCompressedPages);
       withCodecFactory(options.codecFactory);
       withAllocator(options.allocator);
       withPageChecksumVerification(options.usePageChecksumVerification);
@@ -412,8 +427,8 @@ public class ParquetReadOptions {
         useSignedStringMinMax, useStatsFilter, useDictionaryFilter, useRecordFilter,
         useColumnIndexFilter, usePageChecksumVerification, useBloomFilter, useOffHeapBuffer,
         enableParallelIO, ioThreadPoolSize, enableAsyncIOReader, enableParallelColumnReader,
-        enableIOStats, recordFilter, metadataFilter, codecFactory, allocator, maxAllocationSize,
-        properties, fileDecryptionProperties);
+        enableIOStats, enableCompressedPages, recordFilter, metadataFilter, codecFactory, allocator,
+        maxAllocationSize, properties, fileDecryptionProperties);
     }
   }
 }
