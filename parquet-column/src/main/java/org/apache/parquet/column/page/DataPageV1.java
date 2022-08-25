@@ -34,7 +34,7 @@ public class DataPageV1 extends DataPage {
   private final int indexRowCount;
 
   /**
-   * Creates a compressed data page
+   * Creates a new compressed data page
    *
    * @param bytes the bytes for this page
    * @param valueCount count of values in this page
@@ -44,10 +44,27 @@ public class DataPageV1 extends DataPage {
    * @param dlEncoding the definition level encoding for this page
    * @param valuesEncoding the values encoding for this page
    */
-  public DataPageV1(BytesInput bytes, int valueCount, int uncompressedSize,
+  public static DataPageV1 compressed(BytesInput bytes, int valueCount, int uncompressedSize,
       Statistics<?> statistics, Encoding rlEncoding, Encoding dlEncoding, Encoding valuesEncoding) {
-    this(bytes, valueCount, uncompressedSize, statistics, rlEncoding, dlEncoding, valuesEncoding,
-      true);
+    return new DataPageV1(bytes, valueCount, uncompressedSize, statistics, rlEncoding, dlEncoding,
+      valuesEncoding, true);
+  }
+
+  /**
+   * Creates a new uncompressed data page
+   *
+   * @param bytes the bytes for this page
+   * @param valueCount count of values in this page
+   * @param uncompressedSize the uncompressed size of the page
+   * @param statistics of the page's values (max, min, num_null)
+   * @param rlEncoding the repetition level encoding for this page
+   * @param dlEncoding the definition level encoding for this page
+   * @param valuesEncoding the values encoding for this page
+   */
+  public static DataPageV1 uncompressed(BytesInput bytes, int valueCount, int uncompressedSize,
+      Statistics<?> statistics, Encoding rlEncoding, Encoding dlEncoding, Encoding valuesEncoding) {
+    return new DataPageV1(bytes, valueCount, uncompressedSize, statistics, rlEncoding, dlEncoding,
+      valuesEncoding, false);
   }
 
   /**

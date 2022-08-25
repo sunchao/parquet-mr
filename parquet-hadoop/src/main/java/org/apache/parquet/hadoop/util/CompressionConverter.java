@@ -119,7 +119,7 @@ public class CompressionConverter {
           }
           DictionaryPageHeader dictPageHeader = pageHeader.dictionary_page_header;
           pageLoad = translatePageLoad(reader, true, compressor, decompressor, pageHeader.getCompressed_page_size(), pageHeader.getUncompressed_page_size());
-          writer.writeDictionaryPage(new DictionaryPage(BytesInput.from(pageLoad),
+          writer.writeDictionaryPage(DictionaryPage.compressed(BytesInput.from(pageLoad),
                                                    pageHeader.getUncompressed_page_size(),
                                                    dictPageHeader.getNum_values(),
                                                    converter.getEncoding(dictPageHeader.getEncoding())));

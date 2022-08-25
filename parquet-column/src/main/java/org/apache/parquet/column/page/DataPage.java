@@ -28,16 +28,8 @@ abstract public class DataPage extends Page {
   private final int valueCount;
   private final long firstRowIndex;
 
-  DataPage(int compressedSize, int uncompressedSize, int valueCount) {
-    this(compressedSize, uncompressedSize, valueCount, false);
-  }
-
   DataPage(int compressedSize, int uncompressedSize, int valueCount, boolean isCompressed) {
     this(compressedSize, uncompressedSize, valueCount, -1, isCompressed);
-  }
-
-  DataPage(int compressedSize, int uncompressedSize, int valueCount, long firstRowIndex) {
-    this(compressedSize, uncompressedSize, valueCount, firstRowIndex, false);
   }
 
   DataPage(int compressedSize, int uncompressedSize, int valueCount, long firstRowIndex,

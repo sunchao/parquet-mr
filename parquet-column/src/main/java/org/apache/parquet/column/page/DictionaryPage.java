@@ -34,6 +34,31 @@ public class DictionaryPage extends Page {
   private final Encoding encoding;
 
   /**
+   * Creates a compressed dictionary page
+   *
+   * @param bytes the content of the page
+   * @param uncompressedSize the size uncompressed
+   * @param dictionarySize the value count in the dictionary
+   * @param encoding the encoding used
+   */
+  public static DictionaryPage compressed(BytesInput bytes, int uncompressedSize,
+      int dictionarySize, Encoding encoding) {
+    return new DictionaryPage(bytes, uncompressedSize, dictionarySize, encoding, true);
+  }
+
+  /**
+   * Creates an uncompressed dictionary page
+   *
+   * @param bytes the content of the page
+   * @param dictionarySize the value count in the dictionary
+   * @param encoding the encoding used
+   */
+  public static DictionaryPage uncompressed(BytesInput bytes, int dictionarySize,
+      Encoding encoding) {
+    return new DictionaryPage(bytes, dictionarySize, encoding, false);
+  }
+
+  /**
    * Creates an uncompressed dictionary page
    *
    * @param bytes the content of the page
@@ -43,8 +68,9 @@ public class DictionaryPage extends Page {
   public DictionaryPage(BytesInput bytes, int dictionarySize, Encoding encoding) {
     this(bytes, (int)bytes.size(), dictionarySize, encoding, false); // TODO: fix sizes long or int
   }
+
   /**
-   * Creates a dictionary  page
+   * Creates a dictionary page
    *
    * @param bytes the content of the page
    * @param dictionarySize the value count in the dictionary
@@ -98,7 +124,8 @@ public class DictionaryPage extends Page {
   }
 
   public DictionaryPage copy() throws IOException {
-    return new DictionaryPage(BytesInput.copy(bytes), getUncompressedSize(), dictionarySize, encoding);
+    return new DictionaryPage(BytesInput.copy(bytes), getUncompressedSize(), dictionarySize,
+      encoding, isCompressed);
   }
 
 
