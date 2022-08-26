@@ -33,9 +33,7 @@ import org.apache.parquet.bytes.BytesInput;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 
 import static org.apache.parquet.hadoop.metadata.CompressionCodecName.BROTLI;
-import static org.apache.parquet.hadoop.metadata.CompressionCodecName.LZ4;
 import static org.apache.parquet.hadoop.metadata.CompressionCodecName.LZO;
-import static org.apache.parquet.hadoop.metadata.CompressionCodecName.ZSTD;
 
 public class TestDirectCodecFactory {
 
@@ -49,77 +47,84 @@ public class TestDirectCodecFactory {
     ByteBuffer rawBuf = null;
     ByteBuffer outBuf = null;
     ByteBufferAllocator allocator = null;
+    CodecFactory codecFactory = null;
     try {
       allocator = new DirectByteBufferAllocator();
-      final CodecFactory codecFactory = CodecFactory.createDirectCodecFactory(new Configuration(), allocator, pageSize);
-      rawBuf = allocator.allocate(size);
-      final byte[] rawArr = new byte[size];
-      outBuf = allocator.allocate(size * 2);
-      final Random r = new Random();
-      final byte[] random = new byte[1024];
-      int pos = 0;
-      while (pos < size) {
-        r.nextBytes(random);
-        rawBuf.put(random);
-        System.arraycopy(random, 0, rawArr, pos, random.length);
-        pos += random.length;
-      }
-      rawBuf.flip();
+      CodecFactory[] factories = new CodecFactory[]{
+        CodecFactory.createDirectCodecFactory(new Configuration(), allocator, pageSize),
+        new CodecFactory(new Configuration(), pageSize)
+      };
+      for (CodecFactory factory : factories) {
+        codecFactory = factory;
+        rawBuf = allocator.allocate(size);
+        final byte[] rawArr = new byte[size];
+        outBuf = allocator.allocate(size * 2);
+        final Random r = new Random();
+        final byte[] random = new byte[1024];
+        int pos = 0;
+        while (pos < size) {
+          r.nextBytes(random);
+          rawBuf.put(random);
+          System.arraycopy(random, 0, rawArr, pos, random.length);
+          pos += random.length;
+        }
+        rawBuf.flip();
+        final DirectCodecFactory.BytesCompressor c = codecFactory.getCompressor(codec);
+        final CodecFactory.BytesDecompressor d = codecFactory.getDecompressor(codec);
 
-      final DirectCodecFactory.BytesCompressor c = codecFactory.getCompressor(codec);
-      final CodecFactory.BytesDecompressor d = codecFactory.getDecompressor(codec);
-
-      final BytesInput compressed;
-      if (useOnHeapCompression) {
-        compressed = c.compress(BytesInput.from(rawArr));
-      } else {
-        compressed = c.compress(BytesInput.from(rawBuf));
-      }
-
-      switch (decomp) {
-        case OFF_HEAP: {
-          final ByteBuffer buf = compressed.toByteBuffer();
-          final ByteBuffer b = allocator.allocate(buf.capacity());
-          try {
-            b.put(buf);
-            b.flip();
-            d.decompress(b, (int) compressed.size(), outBuf, size);
-            for (int i = 0; i < size; i++) {
-              Assert.assertTrue("Data didn't match at " + i, outBuf.get(i) == rawBuf.get(i));
-            }
-          } finally {
-            allocator.release(b);
-          }
-          break;
+        final BytesInput compressed;
+        if (useOnHeapCompression) {
+          compressed = c.compress(BytesInput.from(rawArr));
+        } else {
+          compressed = c.compress(BytesInput.from(rawBuf));
         }
 
-        case OFF_HEAP_BYTES_INPUT: {
-          final ByteBuffer buf = compressed.toByteBuffer();
-          final ByteBuffer b = allocator.allocate(buf.limit());
-          try {
-            b.put(buf);
-            b.flip();
-            final BytesInput input = d.decompress(BytesInput.from(b), size);
-            Assert.assertArrayEquals(
+        switch (decomp) {
+          case OFF_HEAP: {
+            final ByteBuffer buf = compressed.toByteBuffer();
+            final ByteBuffer b = allocator.allocate(buf.capacity());
+            try {
+              b.put(buf);
+              b.flip();
+              d.decompress(b, (int) compressed.size(), outBuf, size);
+              for (int i = 0; i < size; i++) {
+                Assert.assertEquals("Data didn't match at " + i, outBuf.get(i), rawBuf.get(i));
+              }
+            } finally {
+              allocator.release(b);
+            }
+            break;
+          }
+
+          case OFF_HEAP_BYTES_INPUT: {
+            final ByteBuffer buf = compressed.toByteBuffer();
+            final ByteBuffer b = allocator.allocate(buf.limit());
+            try {
+              b.put(buf);
+              b.flip();
+              final BytesInput input = d.decompress(BytesInput.from(b), size);
+              Assert.assertArrayEquals(
                 String.format("While testing codec %s", codec),
                 input.toByteArray(), rawArr);
-          } finally {
-            allocator.release(b);
+            } finally {
+              allocator.release(b);
+            }
+            break;
           }
-          break;
-        }
-        case ON_HEAP: {
-          final byte[] buf = compressed.toByteArray();
-          final BytesInput input = d.decompress(BytesInput.from(buf), size);
-          Assert.assertArrayEquals(input.toByteArray(), rawArr);
-          break;
+          case ON_HEAP: {
+            final byte[] buf = compressed.toByteArray();
+            final BytesInput input = d.decompress(BytesInput.from(buf), size);
+            Assert.assertArrayEquals(input.toByteArray(), rawArr);
+            break;
+          }
         }
       }
     } catch (Exception e) {
       final String msg = String.format(
-          "Failure while testing Codec: %s, OnHeapCompressionInput: %s, Decompression Mode: %s, Data Size: %d",
-          codec.name(),
-          useOnHeapCompression, decomp.name(), size);
+        "Failure while testing Factory: %s, Codec: %s, OnHeapCompressionInput: %s, Decompression Mode: %s, Data Size: %d",
+        codecFactory,
+        codec.name(),
+        useOnHeapCompression, decomp.name(), size);
       System.out.println(msg);
       throw new RuntimeException(msg, e);
     } finally {
@@ -155,8 +160,6 @@ public class TestDirectCodecFactory {
     final boolean[] comp = { true, false };
     Set<CompressionCodecName> codecsToSkip = new HashSet<>();
     codecsToSkip.add(LZO); // not distributed because it is GPL
-    codecsToSkip.add(LZ4); // not distributed in the default version of Hadoop
-    codecsToSkip.add(ZSTD); // not distributed in the default version of Hadoop
     final String arch = System.getProperty("os.arch");
     if ("aarch64".equals(arch)) {
       // PARQUET-1975 brotli-codec does not have natives for ARM64 architectures

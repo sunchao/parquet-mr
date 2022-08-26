@@ -1,4 +1,4 @@
-/* 
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -32,6 +32,9 @@ import org.apache.hadoop.io.compress.Decompressor;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import org.apache.hadoop.io.compress.DirectDecompressionCodec;
+import org.apache.hadoop.io.compress.DirectDecompressor;
+import org.apache.parquet.hadoop.codec.ZStdDecompressor.ZStdDirectDecompressor;
 
 /**
  * ZSTD compression codec for Parquet.  We do not use the default hadoop
@@ -44,7 +47,7 @@ import java.io.OutputStream;
  * ZstdInputStream use Zstd internally. So no need to create compressor and
  * decompressor in ZstandardCodec.
  */
-public class ZstandardCodec implements Configurable, CompressionCodec {
+public class ZstandardCodec implements Configurable, CompressionCodec, DirectDecompressionCodec {
 
   public final static String PARQUET_COMPRESS_ZSTD_BUFFERPOOL_ENABLED = "parquet.compression.codec.zstd.bufferPool.enabled";
   public final static boolean DEFAULT_PARQUET_COMPRESS_ZSTD_BUFFERPOOL_ENABLED = true;
@@ -73,8 +76,7 @@ public class ZstandardCodec implements Configurable, CompressionCodec {
 
   @Override
   public Decompressor createDecompressor() {
-    // ZstdInputStream calls static Zstd decompressor, so no decompressor is created
-    return null;
+    return new ZStdDecompressor();
   }
 
   @Override
@@ -126,5 +128,11 @@ public class ZstandardCodec implements Configurable, CompressionCodec {
   @Override
   public String getDefaultExtension() {
     return ".zstd";
-  }  
+  }
+
+  @Override
+  public DirectDecompressor createDirectDecompressor() {
+    return new ZStdDirectDecompressor();
+  }
+
 }

@@ -102,6 +102,7 @@
     <avro.version>1.10.1</avro.version>
     <guava.version>27.0.1-jre</guava.version>
     <brotli-codec.version>0.1.1</brotli-codec.version>
+    <lz4-java.version>1.7.1</lz4-java.version>
     <mockito.version>1.10.19</mockito.version>
     <net.openhft.version>0.9</net.openhft.version>
     <maven-javadoc-plugin.version>3.1.0</maven-javadoc-plugin.version>
