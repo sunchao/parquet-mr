@@ -1338,9 +1338,9 @@ public class ParquetFileReader implements Closeable {
       bin = BytesInput.from(pageDecryptor.decrypt(bin.toByteArray(), dictionaryPageAAD));
     }
 
-    return new DictionaryPage(
+    return DictionaryPage.compressed(
         bin, uncompressedPageSize, dictHeader.getNum_values(),
-        converter.getEncoding(dictHeader.getEncoding()), true);
+        converter.getEncoding(dictHeader.getEncoding()));
   }
 
   public BloomFilterReader getBloomFilterDataReader(BlockMetaData block) {

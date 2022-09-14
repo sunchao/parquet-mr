@@ -66,7 +66,7 @@ public class DictionaryPage extends Page {
    * @param encoding the encoding used
    */
   public DictionaryPage(BytesInput bytes, int dictionarySize, Encoding encoding) {
-    this(bytes, (int)bytes.size(), dictionarySize, encoding, false); // TODO: fix sizes long or int
+    this(bytes, (int)bytes.size(), dictionarySize, encoding, true); // TODO: fix sizes long or int
   }
 
   /**
