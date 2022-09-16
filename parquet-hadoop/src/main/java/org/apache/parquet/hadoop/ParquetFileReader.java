@@ -1310,12 +1310,15 @@ public class ParquetFileReader implements Closeable {
     }
 
     DictionaryPage compressedPage = readCompressedDictionary(pageHeader, inputStream, pageDecryptor, dictionaryPageAAD);
-    BytesInputDecompressor decompressor = options.getCodecFactory().getDecompressor(meta.getCodec());
-
-    return new DictionaryPage(
+    if (options.isCompressedPagesEnabled()) {
+      return compressedPage;
+    } else {
+      BytesInputDecompressor decompressor = options.getCodecFactory().getDecompressor(meta.getCodec());
+      return DictionaryPage.uncompressed(
         decompressor.decompress(compressedPage.getBytes(), compressedPage.getUncompressedSize()),
         compressedPage.getDictionarySize(),
         compressedPage.getEncoding());
+    }
   }
 
   private DictionaryPage readCompressedDictionary(
@@ -1335,7 +1338,7 @@ public class ParquetFileReader implements Closeable {
       bin = BytesInput.from(pageDecryptor.decrypt(bin.toByteArray(), dictionaryPageAAD));
     }
 
-    return new DictionaryPage(
+    return DictionaryPage.compressed(
         bin, uncompressedPageSize, dictHeader.getNum_values(),
         converter.getEncoding(dictHeader.getEncoding()));
   }
@@ -1642,8 +1645,7 @@ public class ParquetFileReader implements Closeable {
 
       return new ColumnChunkPageReader(decompressor, pagesInChunk, dictionaryPage, offsetIndex,
         this.descriptor.metadata.getValueCount(), blocks.get(currentBlock).getRowCount(),
-        pageBlockDecryptor, aadPrefix, rowGroupOrdinal, columnOrdinal, pageReader,
-        options.useOffHeapBuffer());
+        pageBlockDecryptor, aadPrefix, rowGroupOrdinal, columnOrdinal, pageReader, options);
     }
 
 
@@ -2157,7 +2159,7 @@ public class ParquetFileReader implements Closeable {
             }
             DictionaryPageHeader dicHeader = pageHeader.getDictionary_page_header();
             DictionaryPage compressedDictionaryPage =
-              new DictionaryPage(
+              DictionaryPage.compressed(
                 pageBytes,
                 uncompressedPageSize,
                 dicHeader.getNum_values(),
@@ -2179,7 +2181,7 @@ public class ParquetFileReader implements Closeable {
               chunk.verifyCrc(pageHeader.getCrc(), pageBytes.toByteArray(),
                 "could not verify page integrity, CRC checksum verification failed");
             }
-            DataPageV1 dataPageV1 = new DataPageV1(
+            DataPageV1 dataPageV1 = DataPageV1.compressed(
               pageBytes,
               dataHeaderV1.getNum_values(),
               uncompressedPageSize,

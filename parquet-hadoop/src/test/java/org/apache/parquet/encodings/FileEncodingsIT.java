@@ -353,7 +353,7 @@ public class FileEncodingsIT {
       try {
         return new DictionaryPage(
             BytesInput.from(dict.getBytes().toByteArray()),
-            dict.getDictionarySize(), dict.getEncoding());
+            dict.getDictionarySize(), dict.getEncoding(), dict.isCompressed());
       } catch (IOException e) {
         throw new ParquetDecodingException("Cannot read dictionary", e);
       }
@@ -366,7 +366,8 @@ public class FileEncodingsIT {
           try {
             return new DataPageV1(BytesInput.from(data.getBytes().toByteArray()),
                 data.getValueCount(), data.getUncompressedSize(), data.getStatistics(),
-                data.getRlEncoding(), data.getDlEncoding(), data.getValueEncoding());
+                data.getRlEncoding(), data.getDlEncoding(), data.getValueEncoding(),
+                data.isCompressed());
           } catch (IOException e) {
             throw new ParquetDecodingException("Cannot read data", e);
           }

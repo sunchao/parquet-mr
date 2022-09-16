@@ -27,6 +27,7 @@ import java.util.PrimitiveIterator;
 
 import java.util.concurrent.LinkedBlockingDeque;
 
+import org.apache.parquet.ParquetReadOptions;
 import org.apache.parquet.Preconditions;
 import org.apache.parquet.bytes.BytesInput;
 import org.apache.parquet.column.ColumnDescriptor;
@@ -75,6 +76,7 @@ public class ColumnChunkPageReadStore implements PageReadStore, DictionaryPageRe
     private final OffsetIndex offsetIndex;
     private final long rowCount;
     private final boolean useOffHeapBuffer;
+    private final boolean returnCompressedPages;
     private int pageIndex = 0;
 
     private final BlockCipher.Decryptor blockDecryptor;
@@ -92,14 +94,15 @@ public class ColumnChunkPageReadStore implements PageReadStore, DictionaryPageRe
         LinkedBlockingDeque<Optional<DataPage>> compressedPages,
         DictionaryPage compressedDictionaryPage, OffsetIndex offsetIndex, long valueCount,
         long rowCount, BlockCipher.Decryptor blockDecryptor, byte[] fileAAD, int rowGroupOrdinal,
-        int columnOrdinal, ParquetFileReader.PageReader pageReader, boolean useOffHeapBuffer) {
+        int columnOrdinal, ParquetFileReader.PageReader pageReader, ParquetReadOptions options) {
       this.decompressor = decompressor;
       this.compressedPages = compressedPages;
       this.compressedDictionaryPage = compressedDictionaryPage;
       this.valueCount = valueCount;
       this.offsetIndex = offsetIndex;
       this.rowCount = rowCount;
-      this.useOffHeapBuffer = useOffHeapBuffer;
+      this.useOffHeapBuffer = options.useOffHeapBuffer();
+      this.returnCompressedPages = options.isCompressedPagesEnabled();
 
       this.blockDecryptor = blockDecryptor;
       this.pageReader = pageReader;
@@ -178,9 +181,12 @@ public class ColumnChunkPageReadStore implements PageReadStore, DictionaryPageRe
       return compressedPage.accept(new DataPage.Visitor<DataPage>() {
         @Override
         public DataPage visit(DataPageV1 dataPageV1) {
+          Preconditions.checkState(dataPageV1.isCompressed(),
+            "Expect input V1 data page to be compressed!");
+
           try {
             BytesInput bytes = dataPageV1.getBytes();
-            BytesInput decompressed;
+            BytesInput pageBytes;
 
             if (useOffHeapBuffer) {
               ByteBuffer byteBuffer;
@@ -198,46 +204,55 @@ public class ColumnChunkPageReadStore implements PageReadStore, DictionaryPageRe
               }
 
               if (!byteBuffer.isDirect()) {
-                ByteBuffer directByteBuffer = ByteBuffer.allocateDirect((int) compressedSize);;
+                ByteBuffer directByteBuffer = ByteBuffer.allocateDirect((int) compressedSize);
                 directByteBuffer.put(byteBuffer);
                 directByteBuffer.flip();
                 byteBuffer = directByteBuffer;
               }
 
-              // The input/output bytebuffers must be direct for (bytebuffer-based, native)
-              // decompressor
-              ByteBuffer decompressedBuffer =
-                ByteBuffer.allocateDirect(dataPageV1.getUncompressedSize());
-              decompressor.decompress(byteBuffer, (int) compressedSize, decompressedBuffer,
-                dataPageV1.getUncompressedSize());
+              if (returnCompressedPages) {
+                pageBytes = BytesInput.from(byteBuffer);
+              } else {
+                // The input/output bytebuffers must be direct for (bytebuffer-based, native)
+                // decompressor
+                ByteBuffer decompressedBuffer =
+                  ByteBuffer.allocateDirect(dataPageV1.getUncompressedSize());
+                decompressor.decompress(byteBuffer, (int) compressedSize, decompressedBuffer,
+                  dataPageV1.getUncompressedSize());
 
-              // HACKY: sometimes we need to do `flip` because the position of output bytebuffer is
-              // not reset.
-              if (decompressedBuffer.position() != 0) {
-                decompressedBuffer.flip();
+                // HACKY: sometimes we need to do `flip` because the position of output bytebuffer is
+                // not reset.
+                if (decompressedBuffer.position() != 0) {
+                  decompressedBuffer.flip();
+                }
+                pageBytes = BytesInput.from(decompressedBuffer);
               }
-              decompressed = BytesInput.from(decompressedBuffer);
             } else { // use on-heap buffer
               if (null != blockDecryptor) {
                 bytes = BytesInput.from(blockDecryptor.decrypt(bytes.toByteArray(), dataPageAAD));
               }
-              decompressed = decompressor.decompress(bytes, dataPageV1.getUncompressedSize());
+              if (returnCompressedPages) {
+                pageBytes = bytes;
+              } else {
+                pageBytes = decompressor.decompress(bytes, dataPageV1.getUncompressedSize());
+              }
             }
 
             final DataPageV1 decompressedPage;
             if (offsetIndex == null) {
               decompressedPage = new DataPageV1(
-                  decompressed,
+                  pageBytes,
                   dataPageV1.getValueCount(),
                   dataPageV1.getUncompressedSize(),
                   dataPageV1.getStatistics(),
                   dataPageV1.getRlEncoding(),
                   dataPageV1.getDlEncoding(),
-                  dataPageV1.getValueEncoding());
+                  dataPageV1.getValueEncoding(),
+                  returnCompressedPages);
             } else {
               long firstRowIndex = offsetIndex.getFirstRowIndex(currentPageIndex);
               decompressedPage = new DataPageV1(
-                  decompressed,
+                  pageBytes,
                   dataPageV1.getValueCount(),
                   dataPageV1.getUncompressedSize(),
                   firstRowIndex,
@@ -245,7 +260,8 @@ public class ColumnChunkPageReadStore implements PageReadStore, DictionaryPageRe
                   dataPageV1.getStatistics(),
                   dataPageV1.getRlEncoding(),
                   dataPageV1.getDlEncoding(),
-                  dataPageV1.getValueEncoding());
+                  dataPageV1.getValueEncoding(),
+                  returnCompressedPages);
             }
             if (dataPageV1.getCrc().isPresent()) {
               decompressedPage.setCrc(dataPageV1.getCrc().getAsInt());
@@ -258,7 +274,8 @@ public class ColumnChunkPageReadStore implements PageReadStore, DictionaryPageRe
 
         @Override
         public DataPage visit(DataPageV2 dataPageV2) {
-          if (!dataPageV2.isCompressed() &&  offsetIndex == null && null == blockDecryptor) {
+          if (!returnCompressedPages && !dataPageV2.isCompressed() &&  offsetIndex == null &&
+              null == blockDecryptor) {
             return dataPageV2;
           }
           BytesInput pageBytes = dataPageV2.getData();
@@ -270,7 +287,7 @@ public class ColumnChunkPageReadStore implements PageReadStore, DictionaryPageRe
               throw new ParquetDecodingException("could not convert page ByteInput to byte array", e);
             }
           }
-          if (dataPageV2.isCompressed()) {
+          if (!returnCompressedPages && dataPageV2.isCompressed()) {
             int uncompressedSize = Math.toIntExact(
                 dataPageV2.getUncompressedSize()
                     - dataPageV2.getDefinitionLevels().size()
@@ -283,7 +300,7 @@ public class ColumnChunkPageReadStore implements PageReadStore, DictionaryPageRe
           }
 
           if (offsetIndex == null) {
-            return DataPageV2.uncompressed(
+            return new DataPageV2(
                 dataPageV2.getRowCount(),
                 dataPageV2.getNullCount(),
                 dataPageV2.getValueCount(),
@@ -291,9 +308,11 @@ public class ColumnChunkPageReadStore implements PageReadStore, DictionaryPageRe
                 dataPageV2.getDefinitionLevels(),
                 dataPageV2.getDataEncoding(),
                 pageBytes,
-                dataPageV2.getStatistics());
+                dataPageV2.getUncompressedSize(),
+                dataPageV2.getStatistics(),
+                returnCompressedPages);
           } else {
-            return DataPageV2.uncompressed(
+            return new DataPageV2(
                 dataPageV2.getRowCount(),
                 dataPageV2.getNullCount(),
                 dataPageV2.getValueCount(),
@@ -302,7 +321,9 @@ public class ColumnChunkPageReadStore implements PageReadStore, DictionaryPageRe
                 dataPageV2.getDefinitionLevels(),
                 dataPageV2.getDataEncoding(),
                 pageBytes,
-                dataPageV2.getStatistics());
+                dataPageV2.getUncompressedSize(),
+                dataPageV2.getStatistics(),
+                returnCompressedPages);
           }
         }
       });
@@ -318,14 +339,18 @@ public class ColumnChunkPageReadStore implements PageReadStore, DictionaryPageRe
         if (null != blockDecryptor) {
           bytes = BytesInput.from(blockDecryptor.decrypt(bytes.toByteArray(), dictionaryPageAAD));
         }
-        DictionaryPage decompressedPage = new DictionaryPage(
-          decompressor.decompress(bytes, compressedDictionaryPage.getUncompressedSize()),
-          compressedDictionaryPage.getDictionarySize(),
-          compressedDictionaryPage.getEncoding());
-        if (compressedDictionaryPage.getCrc().isPresent()) {
-          decompressedPage.setCrc(compressedDictionaryPage.getCrc().getAsInt());
+        if (!returnCompressedPages) {
+          bytes = decompressor.decompress(bytes, compressedDictionaryPage.getUncompressedSize());
         }
-        return decompressedPage;
+        DictionaryPage result = new DictionaryPage(
+          bytes,
+          compressedDictionaryPage.getDictionarySize(),
+          compressedDictionaryPage.getEncoding(),
+          returnCompressedPages);
+        if (compressedDictionaryPage.getCrc().isPresent()) {
+          result.setCrc(compressedDictionaryPage.getCrc().getAsInt());
+        }
+        return result;
       } catch (IOException e) {
         throw new ParquetDecodingException("Could not decompress dictionary page", e);
       }

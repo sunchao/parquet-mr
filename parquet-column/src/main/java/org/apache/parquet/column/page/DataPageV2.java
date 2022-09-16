@@ -1,4 +1,4 @@
-/* 
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -6,9 +6,9 @@
  * to you under the Apache License, Version 2.0 (the
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
- * 
+ *
  *   http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
  * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
@@ -111,7 +111,6 @@ public class DataPageV2 extends DataPage {
   private final Encoding dataEncoding;
   private final BytesInput data;
   private final Statistics<?> statistics;
-  private final boolean isCompressed;
 
   public DataPageV2(
       int rowCount, int nullCount, int valueCount,
@@ -120,7 +119,8 @@ public class DataPageV2 extends DataPage {
       int uncompressedSize,
       Statistics<?> statistics,
       boolean isCompressed) {
-    super(Math.toIntExact(repetitionLevels.size() + definitionLevels.size() + data.size()), uncompressedSize, valueCount);
+    super(Math.toIntExact(repetitionLevels.size() + definitionLevels.size() + data.size()),
+      uncompressedSize, valueCount, isCompressed);
     this.rowCount = rowCount;
     this.nullCount = nullCount;
     this.repetitionLevels = repetitionLevels;
@@ -128,10 +128,9 @@ public class DataPageV2 extends DataPage {
     this.dataEncoding = dataEncoding;
     this.data = data;
     this.statistics = statistics;
-    this.isCompressed = isCompressed;
   }
 
-  private DataPageV2(
+  public DataPageV2(
       int rowCount, int nullCount, int valueCount, long firstRowIndex,
       BytesInput repetitionLevels, BytesInput definitionLevels,
       Encoding dataEncoding, BytesInput data,
@@ -139,7 +138,7 @@ public class DataPageV2 extends DataPage {
       Statistics<?> statistics,
       boolean isCompressed) {
     super(Math.toIntExact(repetitionLevels.size() + definitionLevels.size() + data.size()), uncompressedSize,
-        valueCount, firstRowIndex);
+        valueCount, firstRowIndex, isCompressed);
     this.rowCount = rowCount;
     this.nullCount = nullCount;
     this.repetitionLevels = repetitionLevels;
@@ -147,7 +146,6 @@ public class DataPageV2 extends DataPage {
     this.dataEncoding = dataEncoding;
     this.data = data;
     this.statistics = statistics;
-    this.isCompressed = isCompressed;
   }
 
   public int getRowCount() {
@@ -178,6 +176,7 @@ public class DataPageV2 extends DataPage {
     return statistics;
   }
 
+  @Override
   public boolean isCompressed() {
     return isCompressed;
   }

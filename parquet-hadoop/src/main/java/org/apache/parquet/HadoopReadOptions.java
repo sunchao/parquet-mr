@@ -64,6 +64,7 @@ public class HadoopReadOptions extends ParquetReadOptions {
                             boolean enableAsyncIOReader,
                             boolean enableParallelColumnReader,
                             boolean enableIOStats,
+                            boolean enableCompressedPages,
                             FilterCompat.Filter recordFilter,
                             MetadataFilter metadataFilter,
                             CompressionCodecFactory codecFactory,
@@ -76,8 +77,8 @@ public class HadoopReadOptions extends ParquetReadOptions {
       useSignedStringMinMax, useStatsFilter, useDictionaryFilter, useRecordFilter,
       useColumnIndexFilter, usePageChecksumVerification, useBloomFilter, useOffHeapBuffer,
       enableParallelIO, ioThreadPoolSize, enableAsyncIOReader, enableParallelColumnReader,
-      enableIOStats, recordFilter, metadataFilter, codecFactory, allocator, maxAllocationSize,
-      properties, fileDecryptionProperties
+      enableIOStats, enableCompressedPages, recordFilter, metadataFilter, codecFactory, allocator,
+      maxAllocationSize, properties, fileDecryptionProperties
     );
     this.conf = conf;
   }
@@ -147,8 +148,8 @@ public class HadoopReadOptions extends ParquetReadOptions {
         useSignedStringMinMax, useStatsFilter, useDictionaryFilter, useRecordFilter,
         useColumnIndexFilter, usePageChecksumVerification, useBloomFilter, useOffHeapBuffer,
         enableParallelIO, ioThreadPoolSize, enableAsyncIOReader, enableParallelColumnReader,
-        enableIOStats, recordFilter, metadataFilter, codecFactory, allocator, maxAllocationSize,
-        properties, conf, fileDecryptionProperties);
+        enableIOStats, enableCompressedPages, recordFilter, metadataFilter, codecFactory,
+        allocator, maxAllocationSize, properties, conf, fileDecryptionProperties);
     }
   }
 

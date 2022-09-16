@@ -308,7 +308,7 @@ public class CheckParquet251Command extends BaseCommand {
           try {
             reusableDict = new DictionaryPage(
                 BytesInput.from(dict.getBytes().toByteArray()),
-                dict.getDictionarySize(), dict.getEncoding());
+                dict.getDictionarySize(), dict.getEncoding(), dict.isCompressed());
           } catch (IOException e) {
             throw new ParquetDecodingException("Cannot read dictionary", e);
           }
