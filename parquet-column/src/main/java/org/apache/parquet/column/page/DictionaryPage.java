@@ -59,7 +59,7 @@ public class DictionaryPage extends Page {
   }
 
   /**
-   * Creates an uncompressed dictionary page
+   * Creates a compressed dictionary page
    *
    * @param bytes the content of the page
    * @param dictionarySize the value count in the dictionary
@@ -83,7 +83,7 @@ public class DictionaryPage extends Page {
   }
 
   /**
-   * Creates an uncompressed dictionary page
+   * Creates a compressed dictionary page
    *
    * @param bytes the (possibly compressed) content of the page
    * @param uncompressedSize the size uncompressed
@@ -91,7 +91,7 @@ public class DictionaryPage extends Page {
    * @param encoding the encoding used
    */
   public DictionaryPage(BytesInput bytes, int uncompressedSize, int dictionarySize, Encoding encoding) {
-    this(bytes, uncompressedSize, dictionarySize, encoding, false);
+    this(bytes, uncompressedSize, dictionarySize, encoding, true);
   }
 
   /**
