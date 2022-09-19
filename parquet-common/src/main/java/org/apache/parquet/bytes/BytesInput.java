@@ -19,6 +19,7 @@
 package org.apache.parquet.bytes;
 
 import java.io.ByteArrayOutputStream;
+import java.io.Closeable;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -41,7 +42,7 @@ import org.slf4j.LoggerFactory;
  * subsequent BytesInput reads from the stream will be incorrect
  * if the previous has not been consumed.
  */
-abstract public class BytesInput {
+abstract public class BytesInput implements AutoCloseable {
   private static final Logger LOG = LoggerFactory.getLogger(BytesInput.class);
   private static final EmptyBytesInput EMPTY_BYTES_INPUT = new EmptyBytesInput();
 
@@ -246,6 +247,11 @@ abstract public class BytesInput {
     return ByteBufferInputStream.wrap(toByteBuffer());
   }
 
+  public void close() throws Exception {
+    // By default, this is a no-op. Sub-classes should override this to release the specific
+    // resources they hold.
+  }
+
   /**
    *
    * @return the size in bytes that would be written
@@ -324,6 +330,13 @@ abstract public class BytesInput {
     @Override
     public long size() {
       return size;
+    }
+
+    @Override
+    public void close() throws Exception {
+      for (BytesInput input : inputs) {
+        input.close();
+      }
     }
 
   }
@@ -433,6 +446,11 @@ abstract public class BytesInput {
       return arrayOut.size();
     }
 
+    @Override
+    public void close() {
+      arrayOut.close();
+    }
+
   }
 
   private static class BAOSBytesInput extends BytesInput {
@@ -451,6 +469,11 @@ abstract public class BytesInput {
     @Override
     public long size() {
       return arrayOut.size();
+    }
+
+    @Override
+    public void close() throws Exception {
+      arrayOut.close();
     }
 
   }
@@ -513,6 +536,15 @@ abstract public class BytesInput {
     public long size() {
       return length;
     }
+
+    @Override
+    public void close() throws Exception {
+      for (ByteBuffer buffer : buffers) {
+        if (buffer instanceof AutoCloseable) {
+          ((AutoCloseable) buffer).close();
+        }
+      }
+    }
   }
 
   public static class ByteBufferBytesInput extends BytesInput {
@@ -541,6 +573,13 @@ abstract public class BytesInput {
     public ByteBuffer toByteBuffer() throws IOException {
       // `BytesInput.toByteBuffer` copies data into additional byte array.
       return buffer.slice();
+    }
+
+    @Override
+    public void close() throws Exception {
+      if (buffer instanceof AutoCloseable) {
+        ((AutoCloseable) buffer).close();
+      }
     }
   }
 }

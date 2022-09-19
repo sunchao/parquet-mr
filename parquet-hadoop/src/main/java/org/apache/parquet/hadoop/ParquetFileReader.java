@@ -1075,6 +1075,7 @@ public class ParquetFileReader implements Closeable {
     }
     for (Chunk chunk : builder.build()) {
       readChunkPages(chunk, block);
+      chunk.close();
     }
 
     // avoid re-reading bytes the dictionary reader is used after this call
@@ -1179,6 +1180,7 @@ public class ParquetFileReader implements Closeable {
     }
     for (Chunk chunk : builder.build()) {
       readChunkPages(chunk, block);
+      chunk.close();
     }
 
     // avoid re-reading bytes the dictionary reader is used after this call
@@ -1568,7 +1570,7 @@ public class ParquetFileReader implements Closeable {
   /**
    * The data for a column chunk
    */
-  private class Chunk {
+  private class Chunk implements AutoCloseable {
 
     protected final ChunkDescriptor descriptor;
     protected final ByteBufferInputStream stream;
@@ -1677,6 +1679,11 @@ public class ParquetFileReader implements Closeable {
         ", offsetIndex=" + offsetIndex +
         '}';
     }
+
+    @Override
+    public void close() throws IOException {
+      stream.close();
+    }
   }
 
   /**
@@ -1740,6 +1747,11 @@ public class ParquetFileReader implements Closeable {
       return super.readAsBytesInput(size);
     }
 
+    @Override
+    public void close() throws IOException {
+      super.close();
+      stream.close();
+    }
   }
 
 
@@ -1889,6 +1901,11 @@ public class ParquetFileReader implements Closeable {
           LOG.debug("ASYNC: Added to builder -  chunk slice  {} , stream {}", descriptor, stream);
         }
       }
+
+      if (!isAsyncIOReaderEnabled()) {
+        // If no async, the stream is out of scope afterwards, so closing it beforehand.
+        stream.close();
+      }
     }
 
     public void readAllParallel(SeekableInputStream is, ChunkListBuilder builder)
@@ -2007,6 +2024,9 @@ public class ParquetFileReader implements Closeable {
         ChunkDescriptor descriptor = chunks.get(i);
         builder.add(descriptor, stream.sliceBuffers(descriptor.size), is);
       }
+
+      // stream is out of scope afterwards so closing it
+      stream.close();
     }
 
     /**
@@ -2108,7 +2128,7 @@ public class ParquetFileReader implements Closeable {
     }
 
     void readAllRemainingPages() throws IOException {
-      while(hasMorePages(valuesCountReadSoFar, dataPageCountReadSoFar)) {
+      while (hasMorePages(valuesCountReadSoFar, dataPageCountReadSoFar)) {
         readOnePage();
       }
       if (chunk.offsetIndex == null && valuesCountReadSoFar != chunk.descriptor.metadata.getValueCount()) {

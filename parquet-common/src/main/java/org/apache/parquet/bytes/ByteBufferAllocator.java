@@ -18,10 +18,8 @@
  */
 package org.apache.parquet.bytes;
 
-import java.nio.ByteBuffer;
-
 public interface ByteBufferAllocator {
-  ByteBuffer allocate(int size);
+  ParquetBuf allocate(int size);
 
   /**
    * For RefCounted implementations using direct memory, the release method
@@ -29,7 +27,7 @@ public interface ByteBufferAllocator {
    *
    * @param b a ByteBuffer
    */
-  void release(ByteBuffer b);
+  void release(ParquetBuf b);
 
   /**
    * Indicates if this allocator will produce ByteBuffers backed by direct memory.

@@ -249,7 +249,9 @@ public class SequenceByteBufferInputStream extends ByteBufferInputStream {
 
   @Override
   public void close() throws IOException {
-    super.close();
+    for (ByteBufferInputStream stream : collection) {
+      stream.close();
+    }
   }
 
   @Override

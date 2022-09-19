@@ -25,7 +25,7 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * This ByteBufferInputStream does not consume the ByteBuffer being passed in, 
+ * This ByteBufferInputStream does not consume the ByteBuffer being passed in,
  * but will create a slice of the current buffer.
  */
 class SingleBufferInputStream extends ByteBufferInputStream {
@@ -70,7 +70,7 @@ class SingleBufferInputStream extends ByteBufferInputStream {
 
     return bytesToRead;
   }
-  
+
   @Override
   public long skip(long n) {
     if (n == 0) {
@@ -148,6 +148,17 @@ class SingleBufferInputStream extends ByteBufferInputStream {
     buffer.position(buffer.limit());
 
     return Collections.singletonList(remaining);
+  }
+
+  @Override
+  public void close() throws IOException {
+    if (buffer instanceof AutoCloseable) {
+      try {
+        ((AutoCloseable) buffer).close();
+      } catch (Exception e) {
+        throw new IOException("Fail to close buffer", e);
+      }
+    }
   }
 
   @Override

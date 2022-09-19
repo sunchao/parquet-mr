@@ -189,6 +189,7 @@ public class ColumnChunkPageReadStore implements PageReadStore, DictionaryPageRe
             BytesInput pageBytes;
 
             if (useOffHeapBuffer) {
+              // This is the buffer after decryption, but before decompression
               ByteBuffer byteBuffer;
               long compressedSize = bytes.size();
 
@@ -203,10 +204,16 @@ public class ColumnChunkPageReadStore implements PageReadStore, DictionaryPageRe
                 byteBuffer.flip();
               }
 
+              // Close the original bytes input from the page now
+              bytes.close();
+
               if (!byteBuffer.isDirect()) {
                 ByteBuffer directByteBuffer = ByteBuffer.allocateDirect((int) compressedSize);
                 directByteBuffer.put(byteBuffer);
                 directByteBuffer.flip();
+                if (byteBuffer instanceof AutoCloseable) {
+                  ((AutoCloseable) byteBuffer).close();
+                }
                 byteBuffer = directByteBuffer;
               }
 
@@ -226,15 +233,21 @@ public class ColumnChunkPageReadStore implements PageReadStore, DictionaryPageRe
                   decompressedBuffer.flip();
                 }
                 pageBytes = BytesInput.from(decompressedBuffer);
+                if (byteBuffer instanceof AutoCloseable) {
+                  ((AutoCloseable) byteBuffer).close();
+                }
               }
             } else { // use on-heap buffer
               if (null != blockDecryptor) {
+                BytesInput oldBytes = bytes;
                 bytes = BytesInput.from(blockDecryptor.decrypt(bytes.toByteArray(), dataPageAAD));
+                oldBytes.close();
               }
               if (returnCompressedPages) {
                 pageBytes = bytes;
               } else {
                 pageBytes = decompressor.decompress(bytes, dataPageV1.getUncompressedSize());
+                bytes.close();
               }
             }
 
@@ -267,7 +280,7 @@ public class ColumnChunkPageReadStore implements PageReadStore, DictionaryPageRe
               decompressedPage.setCrc(dataPageV1.getCrc().getAsInt());
             }
             return decompressedPage;
-          } catch (IOException e) {
+          } catch (Exception e) {
             throw new ParquetDecodingException("could not decompress page", e);
           }
         }
@@ -282,8 +295,10 @@ public class ColumnChunkPageReadStore implements PageReadStore, DictionaryPageRe
 
           if (null != blockDecryptor) {
             try {
+              BytesInput oldPageBytes = pageBytes;
               pageBytes = BytesInput.from(blockDecryptor.decrypt(pageBytes.toByteArray(), dataPageAAD));
-            } catch (IOException e) {
+              oldPageBytes.close();
+            } catch (Exception e) {
               throw new ParquetDecodingException("could not convert page ByteInput to byte array", e);
             }
           }
@@ -293,8 +308,10 @@ public class ColumnChunkPageReadStore implements PageReadStore, DictionaryPageRe
                     - dataPageV2.getDefinitionLevels().size()
                     - dataPageV2.getRepetitionLevels().size());
             try {
+              BytesInput oldPageBytes = pageBytes;
               pageBytes = decompressor.decompress(pageBytes, uncompressedSize);
-            } catch (IOException e) {
+              oldPageBytes.close();
+            } catch (Exception e) {
               throw new ParquetDecodingException("could not decompress page", e);
             }
           }

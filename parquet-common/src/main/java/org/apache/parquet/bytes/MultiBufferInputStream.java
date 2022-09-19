@@ -279,6 +279,19 @@ class MultiBufferInputStream extends ByteBufferInputStream {
   }
 
   @Override
+  public void close() throws IOException {
+    for (ByteBuffer buffer : buffers) {
+      if (buffer instanceof AutoCloseable) {
+        try {
+          ((AutoCloseable) buffer).close();
+        } catch (Exception e) {
+          throw new IOException("Fail to close buffer", e);
+        }
+      }
+    }
+  }
+
+  @Override
   public void mark(int readlimit) {
     if (mark >= 0) {
       discardMark();

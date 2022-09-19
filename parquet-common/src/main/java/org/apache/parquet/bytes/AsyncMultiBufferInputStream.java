@@ -150,7 +150,7 @@ class AsyncMultiBufferInputStream extends MultiBufferInputStream {
     return super.nextBuffer();
   }
 
-  public void close() {
+  public void close() throws IOException {
     LOG.debug("ASYNC Stream: Blocked: {} {} {}", totalTimeBlocked.longValue() / 1000.0,
       totalCountBlocked.longValue(), maxTimeBlocked.longValue() / 1000.0);
     Future<Void> readResult;
@@ -167,6 +167,10 @@ class AsyncMultiBufferInputStream extends MultiBufferInputStream {
         // Do nothing
       }
     }
+
+    // Close all buffers collected so far in this stream
+    super.close();
+
     closed = true;
   }
 
