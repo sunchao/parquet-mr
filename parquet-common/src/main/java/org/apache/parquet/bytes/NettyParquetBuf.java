@@ -2,7 +2,9 @@ package org.apache.parquet.bytes;
 
 import io.netty.buffer.ByteBuf;
 
-public class NettyParquetBuf extends ParquetBuf {
+import java.nio.ByteBuffer;
+
+public class NettyParquetBuf implements ParquetBuf {
   private ByteBuf internal;
 
   public NettyParquetBuf(ByteBuf buffer) {
@@ -10,8 +12,33 @@ public class NettyParquetBuf extends ParquetBuf {
   }
 
   @Override
+  public ByteBuffer toByteBuffer() {
+    return internal.nioBuffer();
+  }
+
+  @Override
+  public byte get() {
+    int index = internal.readerIndex();
+    byte result = internal.getByte(index);
+    internal.readerIndex(index + 1);
+    return result;
+  }
+
+  @Override
   public void get(byte[] dst) {
-    internal.getBytes(internal.readerIndex(), dst);
+    int index = internal.readerIndex();
+    internal.getBytes(index, dst);
+    internal.readerIndex(index + dst.length);
+  }
+
+  @Override
+  public void get(byte[] dst, int offset, int length) {
+    internal.getBytes(internal.readerIndex(), dst, offset, length);
+  }
+
+  @Override
+  public void put(byte b) {
+    internal.setByte(internal.writerIndex(), b);
   }
 
   @Override
@@ -27,8 +54,35 @@ public class NettyParquetBuf extends ParquetBuf {
   }
 
   @Override
+  public void put(ParquetBuf buf) {
+    if (buf instanceof NettyParquetBuf) {
+      internal.writeBytes(((NettyParquetBuf) buf).internal);
+    } else if (buf instanceof ByteBufferParquetBuf) {
+      internal.writeBytes(buf.toByteBuffer());
+    } else {
+      throw new IllegalArgumentException("Invalid ParquetBuf class: " +
+        buf.getClass().getSimpleName());
+    }
+  }
+
+  @Override
   public void writeIndex(int index) {
     internal = internal.writerIndex(index);
+  }
+
+  @Override
+  public int readIndex() {
+    return internal.readerIndex();
+  }
+
+  @Override
+  public void readIndex(int index) {
+    internal.readerIndex(index);
+  }
+
+  @Override
+  public int readableBytes() {
+    return internal.readableBytes();
   }
 
   @Override
@@ -52,6 +106,13 @@ public class NettyParquetBuf extends ParquetBuf {
   }
 
   @Override
+  public void flip() {
+    int tmp = internal.readerIndex();
+    internal.readerIndex(internal.writerIndex());
+    internal.writerIndex(tmp);
+  }
+
+  @Override
   public boolean isDirect() {
     return internal.isDirect();
   }
@@ -69,6 +130,11 @@ public class NettyParquetBuf extends ParquetBuf {
   @Override
   public int arrayOffset() {
     return internal.arrayOffset();
+  }
+
+  @Override
+  public ParquetBuf duplicate() {
+    return new NettyParquetBuf(internal.duplicate());
   }
 
   @Override

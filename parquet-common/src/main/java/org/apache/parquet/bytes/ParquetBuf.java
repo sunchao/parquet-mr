@@ -4,48 +4,71 @@ import io.netty.buffer.ByteBuf;
 
 import java.nio.ByteBuffer;
 
-public abstract class ParquetBuf {
-  public static ParquetBuf fromByteBuffer(ByteBuffer buffer) {
+public interface ParquetBuf {
+  static ParquetBuf fromByteBuffer(ByteBuffer buffer) {
     return new ByteBufferParquetBuf(buffer);
   }
 
-  public static ParquetBuf fromNetty(ByteBuf buffer) {
+  static ParquetBuf fromNetty(ByteBuf buffer) {
     return new NettyParquetBuf(buffer);
   }
 
-  public abstract void get(byte[] dst);
+  static ParquetBuf allocate(int capacity) {
+    return new ByteBufferParquetBuf(ByteBuffer.allocate(capacity));
+  }
 
-  public abstract void put(int index, byte b);
+  ByteBuffer toByteBuffer();
 
-  public abstract void put(byte[] b, int offset, int length);
+  byte get();
 
-  public abstract void writeIndex(int index);
+  void get(byte[] dst);
 
-  public abstract int writeIndex();
+  void get(byte[] dst, int offset, int length);
 
-  public abstract int writableBytes();
+  void put(byte b);
 
-  public abstract boolean hasRemaining();
+  void put(int index, byte b);
 
-  public abstract int capacity();
+  void put(byte[] b, int offset, int length);
+
+  void put(ParquetBuf buf);
+
+  int readIndex();
+
+  void readIndex(int index);
+
+  int readableBytes();
+
+  int writeIndex();
+
+  void writeIndex(int index);
+
+  int writableBytes();
+
+  boolean hasRemaining();
+
+  int capacity();
+
+  void flip();
 
   /**
    * Whether this buffer is backed by direct off-heap memory.
    */
-  public abstract boolean isDirect();
+  boolean isDirect();
 
   /**
    * Whether or not this buffer is backed by an accessible byte array.
    */
-  public abstract boolean hasArray();
+  boolean hasArray();
 
-  public abstract byte[] array();
+  byte[] array();
 
-  public abstract int arrayOffset();
+  int arrayOffset();
+
+  ParquetBuf duplicate();
 
   /**
    * Release this buffer, including the memory it holds.
    */
-  public abstract void release();
-
+  void release();
 }

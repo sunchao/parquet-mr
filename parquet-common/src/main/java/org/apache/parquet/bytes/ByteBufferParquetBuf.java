@@ -2,7 +2,7 @@ package org.apache.parquet.bytes;
 
 import java.nio.ByteBuffer;
 
-public class ByteBufferParquetBuf extends ParquetBuf {
+public class ByteBufferParquetBuf implements ParquetBuf {
   private final ByteBuffer internal;
 
   public ByteBufferParquetBuf(ByteBuffer buffer) {
@@ -10,8 +10,28 @@ public class ByteBufferParquetBuf extends ParquetBuf {
   }
 
   @Override
+  public ByteBuffer toByteBuffer() {
+    return internal;
+  }
+
+  @Override
+  public byte get() {
+    return internal.get();
+  }
+
+  @Override
   public void get(byte[] dst) {
-    internal.flip();
+    internal.get(dst);
+  }
+
+  @Override
+  public void get(byte[] dst, int offset, int length) {
+    internal.get(dst, offset, length);
+  }
+
+  @Override
+  public void put(byte b) {
+    internal.put(b);
   }
 
   @Override
@@ -25,8 +45,28 @@ public class ByteBufferParquetBuf extends ParquetBuf {
   }
 
   @Override
+  public void put(ParquetBuf buf) {
+    internal.put(buf.toByteBuffer());
+  }
+
+  @Override
   public void writeIndex(int index) {
     internal.position(index);
+  }
+
+  @Override
+  public int readIndex() {
+    return internal.position();
+  }
+
+  @Override
+  public void readIndex(int index) {
+    internal.position(index);
+  }
+
+  @Override
+  public int readableBytes() {
+    return internal.remaining();
   }
 
   @Override
@@ -50,6 +90,11 @@ public class ByteBufferParquetBuf extends ParquetBuf {
   }
 
   @Override
+  public void flip() {
+    internal.flip();
+  }
+
+  @Override
   public boolean isDirect() {
     return internal.isDirect();
   }
@@ -67,6 +112,11 @@ public class ByteBufferParquetBuf extends ParquetBuf {
   @Override
   public int arrayOffset() {
     return internal.arrayOffset();
+  }
+
+  @Override
+  public ParquetBuf duplicate() {
+    return new ByteBufferParquetBuf(internal.duplicate());
   }
 
   @Override

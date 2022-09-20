@@ -66,6 +66,7 @@ import org.apache.parquet.HadoopReadOptions;
 import org.apache.parquet.ParquetReadOptions;
 import org.apache.parquet.bytes.ByteBufferInputStream;
 import org.apache.parquet.bytes.BytesInput;
+import org.apache.parquet.bytes.ParquetBuf;
 import org.apache.parquet.bytes.SequenceByteBufferInputStream;
 import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.column.page.DataPage;
@@ -626,7 +627,8 @@ public class ParquetFileReader implements Closeable {
     f.readFully(footerBytes);
     ByteBuffer footerBytesBuffer = ByteBuffer.wrap(footerBytes);
     LOG.debug("Finished to read all footer bytes.");
-    InputStream footerBytesStream = ByteBufferInputStream.wrap(footerBytesBuffer);
+    InputStream footerBytesStream =
+      ByteBufferInputStream.wrap(ParquetBuf.fromByteBuffer(footerBytesBuffer));
 
     // Regular file, or encrypted file with plaintext footer
     if (!encryptedFooterMode) {
@@ -1497,7 +1499,7 @@ public class ParquetFileReader implements Closeable {
     // It's a mistake to have both lists populated
     private class ChunkData {
       // Used for synchronous reads
-      final List<ByteBuffer> buffers = new ArrayList<>();
+      final List<ParquetBuf> buffers = new ArrayList<>();
       // Used for asynchronous reads
       final List<ByteBufferInputStream> streams = new ArrayList<>();
       OffsetIndex offsetIndex;
@@ -1518,7 +1520,7 @@ public class ParquetFileReader implements Closeable {
       this.f = f;
     }
 
-    void add(ChunkDescriptor descriptor, List<ByteBuffer> buffers, SeekableInputStream f) {
+    void add(ChunkDescriptor descriptor, List<ParquetBuf> buffers, SeekableInputStream f) {
       ChunkData data = map.get(descriptor);
       if (data == null) {
         data = new ChunkData();
@@ -1837,12 +1839,12 @@ public class ParquetFileReader implements Closeable {
       length += descriptor.size;
     }
 
-    private List<ByteBuffer> allocateReadBuffers() {
+    private List<ParquetBuf> allocateReadBuffers() {
       int fullAllocations = Math.toIntExact(length / options.getMaxAllocationSize());
       int lastAllocationSize = Math.toIntExact(length % options.getMaxAllocationSize());
 
       int numAllocations = fullAllocations + (lastAllocationSize > 0 ? 1 : 0);
-      List<ByteBuffer> buffers = new ArrayList<>(numAllocations);
+      List<ParquetBuf> buffers = new ArrayList<>(numAllocations);
 
       for (int i = 0; i < fullAllocations; i += 1) {
         buffers.add(options.getAllocator().allocate(options.getMaxAllocationSize()));
@@ -1867,15 +1869,15 @@ public class ParquetFileReader implements Closeable {
       // same input stream shared between threads.
       is.seek(offset);
 
-      List<ByteBuffer> buffers = allocateReadBuffers();
+      List<ParquetBuf> buffers = allocateReadBuffers();
 
       ByteBufferInputStream stream;
       if (!isAsyncIOReaderEnabled()) {
         // pre-read the files into the allocated buffers
         long startTime = System.nanoTime();
-        for (ByteBuffer buffer : buffers) {
-          is.readFully(buffer);
-          buffer.flip();
+        for (ParquetBuf buf : buffers) {
+          is.readFully(buf.toByteBuffer());
+          buf.flip();
         }
         long timeSpent = System.nanoTime() - startTime;
         LOG.debug("SYNC Stream: READ - {}", timeSpent/1000.0);

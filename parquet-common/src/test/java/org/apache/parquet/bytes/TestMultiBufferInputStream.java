@@ -39,7 +39,11 @@ public class TestMultiBufferInputStream extends TestByteBufferInputStreams {
 
   @Override
   protected ByteBufferInputStream newStream() {
-    return new MultiBufferInputStream(DATA);
+    List<ParquetBuf> bufs = new ArrayList<>();
+    for (ByteBuffer buffer : DATA) {
+      bufs.add(ParquetBuf.fromByteBuffer(buffer));
+    }
+    return new MultiBufferInputStream(bufs);
   }
 
   @Override
@@ -56,7 +60,7 @@ public class TestMultiBufferInputStream extends TestByteBufferInputStreams {
     ByteBufferInputStream stream = newStream();
     int length = stream.available();
 
-    List<ByteBuffer> buffers = new ArrayList<>();
+    List<ParquetBuf> buffers = new ArrayList<>();
     // slice the stream into 3 8-byte buffers and 1 2-byte buffer
     while (stream.available() > 0) {
       int bytesToSlice = Math.min(stream.available(), 8);
@@ -69,54 +73,54 @@ public class TestMultiBufferInputStream extends TestByteBufferInputStreams {
     int i = 0;
 
     // one is a view of the first buffer because it is smaller
-    ByteBuffer one = buffers.get(0);
+    ParquetBuf one = buffers.get(0);
     Assert.assertSame("Should be a duplicate of the first array",
         one.array(), DATA.get(0).array());
-    Assert.assertEquals(8, one.remaining());
-    Assert.assertEquals(0, one.position());
-    Assert.assertEquals(8, one.limit());
+    Assert.assertEquals(8, one.readableBytes());
+    Assert.assertEquals(0, one.readIndex());
+    Assert.assertEquals(8, one.writeIndex());
     Assert.assertEquals(9, one.capacity());
     for (; i < 8; i += 1) {
       Assert.assertEquals("Should produce correct values", i, one.get());
     }
 
     // two should be a copy of the next 8 bytes
-    ByteBuffer two = buffers.get(1);
-    Assert.assertEquals(8, two.remaining());
-    Assert.assertEquals(0, two.position());
-    Assert.assertEquals(8, two.limit());
+    ParquetBuf two = buffers.get(1);
+    Assert.assertEquals(8, two.readableBytes());
+    Assert.assertEquals(0, two.readIndex());
+    Assert.assertEquals(8, two.writeIndex());
     Assert.assertEquals(8, two.capacity());
     for (; i < 16; i += 1) {
       Assert.assertEquals("Should produce correct values", i, two.get());
     }
 
     // three is a copy of part of the 4th buffer
-    ByteBuffer three = buffers.get(2);
+    ParquetBuf three = buffers.get(2);
     Assert.assertSame("Should be a duplicate of the fourth array",
         three.array(), DATA.get(3).array());
-    Assert.assertEquals(8, three.remaining());
-    Assert.assertEquals(3, three.position());
-    Assert.assertEquals(11, three.limit());
+    Assert.assertEquals(8, three.readableBytes());
+    Assert.assertEquals(3, three.readIndex());
+    Assert.assertEquals(11, three.writeIndex());
     Assert.assertEquals(12, three.capacity());
     for (; i < 24; i += 1) {
       Assert.assertEquals("Should produce correct values", i, three.get());
     }
 
     // four should be a copy of the next 8 bytes
-    ByteBuffer four = buffers.get(3);
-    Assert.assertEquals(8, four.remaining());
-    Assert.assertEquals(0, four.position());
-    Assert.assertEquals(8, four.limit());
+    ParquetBuf four = buffers.get(3);
+    Assert.assertEquals(8, four.readableBytes());
+    Assert.assertEquals(0, four.readIndex());
+    Assert.assertEquals(8, four.writeIndex());
     Assert.assertEquals(8, four.capacity());
     for (; i < 32; i += 1) {
       Assert.assertEquals("Should produce correct values", i, four.get());
     }
 
     // five should be a copy of the next 8 bytes
-    ByteBuffer five = buffers.get(4);
-    Assert.assertEquals(3, five.remaining());
-    Assert.assertEquals(0, five.position());
-    Assert.assertEquals(3, five.limit());
+    ParquetBuf five = buffers.get(4);
+    Assert.assertEquals(3, five.readableBytes());
+    Assert.assertEquals(0, five.readIndex());
+    Assert.assertEquals(3, five.writeIndex());
     Assert.assertEquals(3, five.capacity());
     for (; i < 35; i += 1) {
       Assert.assertEquals("Should produce correct values", i, five.get());
@@ -127,11 +131,11 @@ public class TestMultiBufferInputStream extends TestByteBufferInputStreams {
   public void testSliceBuffersData() throws Exception {
     ByteBufferInputStream stream = newStream();
 
-    List<ByteBuffer> buffers = stream.sliceBuffers(stream.available());
-    List<ByteBuffer> nonEmptyBuffers = new ArrayList<>();
+    List<ParquetBuf> buffers = stream.sliceBuffers(stream.available());
+    List<ParquetBuf> nonEmptyBuffers = new ArrayList<>();
     for (ByteBuffer buffer : DATA) {
       if (buffer.remaining() > 0) {
-        nonEmptyBuffers.add(buffer);
+        nonEmptyBuffers.add(ParquetBuf.fromByteBuffer(buffer));
       }
     }
 

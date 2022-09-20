@@ -29,18 +29,18 @@ import java.util.List;
 import java.util.NoSuchElementException;
 
 class MultiBufferInputStream extends ByteBufferInputStream {
-  private static final ByteBuffer EMPTY = ByteBuffer.allocate(0);
+  private static final ParquetBuf EMPTY = new ByteBufferParquetBuf(ByteBuffer.allocate(0));
 
-  protected final List<ByteBuffer> buffers;
+  protected final List<ParquetBuf> buffers;
   private final long length;
 
-  private Iterator<ByteBuffer> iterator;
-  private ByteBuffer current = EMPTY;
+  private Iterator<ParquetBuf> iterator;
+  private ParquetBuf current = EMPTY;
   private long position = 0;
 
   private long mark = -1;
   private long markLimit = 0;
-  private List<ByteBuffer> markBuffers = new ArrayList<>();
+  private List<ParquetBuf> markBuffers = new ArrayList<>();
 
   @Override
   public String toString() {
@@ -51,12 +51,12 @@ class MultiBufferInputStream extends ByteBufferInputStream {
       '}';
   }
 
-  MultiBufferInputStream(List<ByteBuffer> buffers) {
+  MultiBufferInputStream(List<ParquetBuf> buffers) {
     this.buffers = buffers;
 
     long totalLen = 0;
-    for (ByteBuffer buffer : buffers) {
-      totalLen += buffer.remaining();
+    for (ParquetBuf buffer : buffers) {
+      totalLen += buffer.readableBytes();
     }
     this.length = totalLen;
 
@@ -84,9 +84,9 @@ class MultiBufferInputStream extends ByteBufferInputStream {
 
     long bytesSkipped = 0;
     while (bytesSkipped < n) {
-      if (current.remaining() > 0) {
-        long bytesToSkip = Math.min(n - bytesSkipped, current.remaining());
-        current.position(current.position() + (int) bytesToSkip);
+      if (current.readableBytes() > 0) {
+        long bytesToSkip = Math.min(n - bytesSkipped, current.readableBytes());
+        current.readIndex(current.readIndex() + (int) bytesToSkip);
         bytesSkipped += bytesToSkip;
         this.position += bytesToSkip;
       } else if (!nextBuffer()) {
@@ -99,8 +99,8 @@ class MultiBufferInputStream extends ByteBufferInputStream {
   }
 
   @Override
-  public int read(ByteBuffer out) {
-    int len = out.remaining();
+  public int read(ParquetBuf out) {
+    int len = out.readableBytes();
     if (len <= 0) {
       return 0;
     }
@@ -111,19 +111,19 @@ class MultiBufferInputStream extends ByteBufferInputStream {
 
     int bytesCopied = 0;
     while (bytesCopied < len) {
-      if (current.remaining() > 0) {
+      if (current.readableBytes() > 0) {
         int bytesToCopy;
-        ByteBuffer copyBuffer;
-        if (current.remaining() <= out.remaining()) {
+        ParquetBuf copyBuffer;
+        if (current.readableBytes() <= out.writableBytes()) {
           // copy all of the current buffer
-          bytesToCopy = current.remaining();
+          bytesToCopy = current.readableBytes();
           copyBuffer = current;
         } else {
           // copy a slice of the current buffer
-          bytesToCopy = out.remaining();
+          bytesToCopy = out.writableBytes();
           copyBuffer = current.duplicate();
-          copyBuffer.limit(copyBuffer.position() + bytesToCopy);
-          current.position(copyBuffer.position() + bytesToCopy);
+          copyBuffer.writeIndex(copyBuffer.readIndex() + bytesToCopy);
+          current.readIndex(copyBuffer.readIndex() + bytesToCopy);
         }
 
         out.put(copyBuffer);
@@ -140,7 +140,7 @@ class MultiBufferInputStream extends ByteBufferInputStream {
   }
 
   @Override
-  public ByteBuffer slice(int length) throws EOFException {
+  public ParquetBuf slice(int length) throws EOFException {
     if (length <= 0) {
       return EMPTY;
     }
@@ -149,11 +149,11 @@ class MultiBufferInputStream extends ByteBufferInputStream {
       throw new EOFException();
     }
 
-    ByteBuffer slice;
-    if (length > current.remaining()) {
+    ParquetBuf slice;
+    if (length > current.readableBytes()) {
       // a copy is needed to return a single buffer
       // TODO: use an allocator
-      slice = ByteBuffer.allocate(length);
+      slice = ParquetBuf.allocate(length);
       int bytesCopied = read(slice);
       slice.flip();
       if (bytesCopied < length) {
@@ -161,15 +161,15 @@ class MultiBufferInputStream extends ByteBufferInputStream {
       }
     } else {
       slice = current.duplicate();
-      slice.limit(slice.position() + length);
-      current.position(slice.position() + length);
+      slice.writeIndex(slice.readIndex() + length);
+      current.readIndex(slice.readIndex() + length);
       this.position += length;
     }
 
     return slice;
   }
 
-  public List<ByteBuffer> sliceBuffers(long len) throws EOFException {
+  public List<ParquetBuf> sliceBuffers(long len) throws EOFException {
     if (len <= 0) {
       return Collections.emptyList();
     }
@@ -178,20 +178,20 @@ class MultiBufferInputStream extends ByteBufferInputStream {
       throw new EOFException();
     }
 
-    List<ByteBuffer> buffers = new ArrayList<>();
+    List<ParquetBuf> buffers = new ArrayList<>();
     long bytesAccumulated = 0;
     while (bytesAccumulated < len) {
-      if (current.remaining() > 0) {
+      if (current.readableBytes() > 0) {
         // get a slice of the current buffer to return
         // always fits in an int because remaining returns an int that is >= 0
-        int bufLen = (int) Math.min(len - bytesAccumulated, current.remaining());
-        ByteBuffer slice = current.duplicate();
-        slice.limit(slice.position() + bufLen);
+        int bufLen = (int) Math.min(len - bytesAccumulated, current.readableBytes());
+        ParquetBuf slice = current.duplicate();
+        slice.writeIndex(slice.readIndex() + bufLen);
         buffers.add(slice);
         bytesAccumulated += bufLen;
 
         // update state; the bytes are considered read
-        current.position(current.position() + bufLen);
+        current.readIndex(current.readIndex() + bufLen);
         this.position += bufLen;
       } else if (!nextBuffer()) {
         // there are no more buffers
@@ -203,7 +203,7 @@ class MultiBufferInputStream extends ByteBufferInputStream {
   }
 
   @Override
-  public List<ByteBuffer> remainingBuffers() {
+  public List<ParquetBuf> remainingBuffers() {
     if (position >= length) {
       return Collections.emptyList();
     }
@@ -232,8 +232,8 @@ class MultiBufferInputStream extends ByteBufferInputStream {
 
     int bytesRead = 0;
     while (bytesRead < len) {
-      if (current.remaining() > 0) {
-        int bytesToRead = Math.min(len - bytesRead, current.remaining());
+      if (current.readableBytes() > 0) {
+        int bytesToRead = Math.min(len - bytesRead, current.readableBytes());
         current.get(bytes, off + bytesRead, bytesToRead);
         bytesRead += bytesToRead;
         this.position += bytesToRead;
@@ -258,7 +258,7 @@ class MultiBufferInputStream extends ByteBufferInputStream {
     }
 
     while (true) {
-      if (current.remaining() > 0) {
+      if (current.readableBytes() > 0) {
         this.position += 1;
         return current.get() & 0xFF; // as unsigned
       } else if (!nextBuffer()) {
@@ -280,14 +280,8 @@ class MultiBufferInputStream extends ByteBufferInputStream {
 
   @Override
   public void close() throws IOException {
-    for (ByteBuffer buffer : buffers) {
-      if (buffer instanceof AutoCloseable) {
-        try {
-          ((AutoCloseable) buffer).close();
-        } catch (Exception e) {
-          throw new IOException("Fail to close buffer", e);
-        }
-      }
+    for (ParquetBuf buffer : buffers) {
+      buffer.release();
     }
   }
 

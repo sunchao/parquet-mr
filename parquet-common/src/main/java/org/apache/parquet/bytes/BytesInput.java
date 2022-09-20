@@ -507,14 +507,14 @@ abstract public class BytesInput implements AutoCloseable {
   }
 
   private static class BufferListBytesInput extends BytesInput {
-    private final List<ByteBuffer> buffers;
+    private final List<ParquetBuf> buffers;
     private final long length;
 
-    public BufferListBytesInput(List<ByteBuffer> buffers) {
+    public BufferListBytesInput(List<ParquetBuf> buffers) {
       this.buffers = buffers;
       long totalLen = 0;
-      for (ByteBuffer buffer : buffers) {
-        totalLen += buffer.remaining();
+      for (ParquetBuf buffer : buffers) {
+        totalLen += buffer.readableBytes();
       }
       this.length = totalLen;
     }
@@ -522,8 +522,8 @@ abstract public class BytesInput implements AutoCloseable {
     @Override
     public void writeAllTo(OutputStream out) throws IOException {
       WritableByteChannel channel = Channels.newChannel(out);
-      for (ByteBuffer buffer : buffers) {
-        channel.write(buffer.duplicate());
+      for (ParquetBuf buffer : buffers) {
+        channel.write(buffer.toByteBuffer().duplicate());
       }
     }
 
@@ -539,24 +539,22 @@ abstract public class BytesInput implements AutoCloseable {
 
     @Override
     public void close() throws Exception {
-      for (ByteBuffer buffer : buffers) {
-        if (buffer instanceof AutoCloseable) {
-          ((AutoCloseable) buffer).close();
-        }
+      for (ParquetBuf buffer : buffers) {
+        buffer.release();
       }
     }
   }
 
   public static class ByteBufferBytesInput extends BytesInput {
-    private final ByteBuffer buffer;
+    private final ParquetBuf buffer;
 
-    private ByteBufferBytesInput(ByteBuffer buffer) {
+    private ByteBufferBytesInput(ParquetBuf buffer) {
       this.buffer = buffer;
     }
 
     @Override
     public void writeAllTo(OutputStream out) throws IOException {
-      Channels.newChannel(out).write(buffer.duplicate());
+      Channels.newChannel(out).write(buffer.toByteBuffer().duplicate());
     }
 
     @Override
@@ -566,13 +564,13 @@ abstract public class BytesInput implements AutoCloseable {
 
     @Override
     public long size() {
-      return buffer.remaining();
+      return buffer.readableBytes();
     }
 
     @Override
     public ByteBuffer toByteBuffer() throws IOException {
       // `BytesInput.toByteBuffer` copies data into additional byte array.
-      return buffer.slice();
+      return buffer.toByteBuffer();
     }
 
     @Override

@@ -186,17 +186,17 @@ public abstract class TestByteBufferInputStreams {
     ByteBufferInputStream stream = newStream();
     int length = stream.available();
 
-    ByteBuffer empty = stream.slice(0);
+    ParquetBuf empty = stream.slice(0);
     Assert.assertNotNull("slice(0) should produce a non-null buffer", empty);
     Assert.assertEquals("slice(0) should produce an empty buffer",
-        0, empty.remaining());
+        0, empty.readableBytes());
 
     Assert.assertEquals("Position should be at start", 0, stream.position());
 
     int i = 0;
     while (stream.available() > 0) {
       int bytesToSlice = Math.min(stream.available(), 10);
-      ByteBuffer buffer = stream.slice(bytesToSlice);
+      ParquetBuf buffer = stream.slice(bytesToSlice);
 
       for (int j = 0; j < bytesToSlice; j += 1) {
         Assert.assertEquals("Data should be correct", i + j, buffer.get());
@@ -223,12 +223,12 @@ public abstract class TestByteBufferInputStreams {
     final ByteBufferInputStream stream = newStream();
     final int length = stream.available();
 
-    List<ByteBuffer> buffers = stream.sliceBuffers(stream.available());
+    List<ParquetBuf> buffers = stream.sliceBuffers(stream.available());
 
     Assert.assertEquals("Should consume all buffers", length, stream.position());
 
     assertThrows("Should throw EOFException when empty",
-        EOFException.class, (Callable<List<ByteBuffer>>) () -> stream.sliceBuffers(length));
+        EOFException.class, (Callable<List<ParquetBuf>>) () -> stream.sliceBuffers(length));
 
     ByteBufferInputStream copy = ByteBufferInputStream.wrap(buffers);
     for (int i = 0; i < length; i += 1) {
@@ -244,7 +244,7 @@ public abstract class TestByteBufferInputStreams {
       ByteBufferInputStream stream = newStream();
       int length = stream.available();
 
-      List<ByteBuffer> buffers = new ArrayList<>();
+      List<ParquetBuf> buffers = new ArrayList<>();
       while (stream.available() > 0) {
         buffers.addAll(stream.sliceBuffers(Math.min(size, stream.available())));
       }
@@ -268,7 +268,7 @@ public abstract class TestByteBufferInputStreams {
     int length = stream.available();
 
     int sliceLength = 5;
-    List<ByteBuffer> buffers = stream.sliceBuffers(sliceLength);
+    List<ParquetBuf> buffers = stream.sliceBuffers(sliceLength);
     Assert.assertEquals("Should advance the original stream",
         length - sliceLength, stream.available());
     Assert.assertEquals("Should advance the original stream position",
@@ -277,13 +277,13 @@ public abstract class TestByteBufferInputStreams {
     Assert.assertEquals("Should return a slice of the first buffer",
         1, buffers.size());
 
-    ByteBuffer buffer = buffers.get(0);
+    ParquetBuf buffer = buffers.get(0);
     Assert.assertEquals("Should have requested bytes",
-        sliceLength, buffer.remaining());
+        sliceLength, buffer.readableBytes());
 
     // read the buffer one past the returned limit. this should not change the
     // next value in the original stream
-    buffer.limit(sliceLength + 1);
+    buffer.writeIndex(sliceLength + 1);
     for (int i = 0; i < sliceLength + 1; i += 1) {
       Assert.assertEquals("Should have correct data", i, buffer.get());
     }
@@ -294,9 +294,9 @@ public abstract class TestByteBufferInputStreams {
         sliceLength, stream.read());
 
     // change the underlying data buffer
-    buffer.limit(sliceLength + 2);
+    buffer.writeIndex(sliceLength + 2);
     int originalValue = buffer.duplicate().get();
-    ByteBuffer undoBuffer = buffer.duplicate();
+    ParquetBuf undoBuffer = buffer.duplicate();
 
     try {
       buffer.put((byte) 255);

@@ -35,7 +35,7 @@ public class ByteBufferInputStream extends InputStream {
   // Used to maintain the deprecated behavior of instantiating ByteBufferInputStream directly
   private final ByteBufferInputStream delegate;
 
-  public static ByteBufferInputStream wrap(ByteBuffer... buffers) {
+  public static ByteBufferInputStream wrap(ParquetBuf... buffers) {
     if (buffers.length == 1) {
       return new SingleBufferInputStream(buffers[0]);
     } else {
@@ -43,7 +43,7 @@ public class ByteBufferInputStream extends InputStream {
     }
   }
 
-  public static ByteBufferInputStream wrap(List<ByteBuffer> buffers) {
+  public static ByteBufferInputStream wrap(List<ParquetBuf> buffers) {
     if (buffers.size() == 1) {
       return new SingleBufferInputStream(buffers.get(0));
     } else {
@@ -113,15 +113,15 @@ public class ByteBufferInputStream extends InputStream {
     }
   }
 
-  public int read(ByteBuffer out) {
+  public int read(ParquetBuf out) {
     return delegate.read(out);
   }
 
-  public ByteBuffer slice(int length) throws EOFException {
+  public ParquetBuf slice(int length) throws EOFException {
     return delegate.slice(length);
   }
 
-  public List<ByteBuffer> sliceBuffers(long length) throws EOFException {
+  public List<ParquetBuf> sliceBuffers(long length) throws EOFException {
     return delegate.sliceBuffers(length);
   }
 
@@ -129,7 +129,7 @@ public class ByteBufferInputStream extends InputStream {
     return ByteBufferInputStream.wrap(sliceBuffers(length));
   }
 
-  public List<ByteBuffer> remainingBuffers() {
+  public List<ParquetBuf> remainingBuffers() {
     return delegate.remainingBuffers();
   }
 
